@@ -66,7 +66,7 @@ public class Main {
             // Start the receiver
             Host myHost = parser.hosts().get(myId - 1); 
             Receiver receiver = new Receiver();
-            receiver.receiveMessages(myHost.getPort(), parser.output(), myId);
+            receiver.receiveMessages(myHost.getPort(), parser.output(), myId, parser.hosts());
         } else {
             // Start the sender
             Sender sender = new Sender();
