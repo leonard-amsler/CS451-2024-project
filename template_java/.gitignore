@@ -10,6 +10,7 @@ bin/da_proc.jar
 
 # Log file
 *.log
+*.output
 
 # BlueJ files
 *.ctxt
