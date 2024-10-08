@@ -53,8 +53,6 @@ public class Main {
         System.out.println("Path to config:");
         System.out.println("===============");
         System.out.println(parser.config_path() + "\n");
-
-        System.out.println("Doing some initialization\n");
         
         // Load config values
         int m = parser.config_m();              // Number of messages to send
@@ -64,16 +62,16 @@ public class Main {
         // Check if this is the receiver or sender
         if (myId == receiverId) {
             // Start the receiver
+            System.out.println("Starting receiver...");
             Host myHost = parser.hosts().get(myId - 1); 
             Receiver receiver = new Receiver();
             receiver.receiveMessages(myHost.getPort(), parser.output(), myId, parser.hosts());
         } else {
             // Start the sender
+            System.out.println("Starting sender...");
             Sender sender = new Sender();
             sender.sendMessages(receiverId, m, parser.hosts(), parser.output(), myId);
         }
-
-        System.out.println("Broadcasting and delivering messages...\n");
 
         // After a process finishes broadcasting,
         // it waits forever for the delivery of messages.

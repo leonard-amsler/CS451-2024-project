@@ -26,6 +26,14 @@ public class Sender {
      * @param myId the id of the sender
      */
     public void sendMessages(int receiverId, int m, List<Host> hosts, String outputFilePath, int myId) {
+        // Delete & recreate the output file
+        try {
+            Files.deleteIfExists(Paths.get(outputFilePath));
+            Files.createFile(Paths.get(outputFilePath));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         try (DatagramSocket socket = new DatagramSocket()) {
             Host receiver = hosts.get(receiverId - 1); // Get the receiver host
             InetAddress receiverAddress = InetAddress.getByName(receiver.getIp());
@@ -79,9 +87,6 @@ public class Sender {
         // Log the send event
         if (shouldWrite) {
             String log = "b " + seqNum + "\n";
-            if (!Files.exists(Paths.get(outputFilePath))) {
-                Files.createFile(Paths.get(outputFilePath));
-            }
             Files.write(Paths.get(outputFilePath), log.getBytes(), StandardOpenOption.APPEND);
         }
     }
@@ -99,8 +104,8 @@ public class Sender {
             DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
             while (ackReceived.containsValue(false)) { // Keep running until all messages are acknowledged
-                int remainingAcks = ackReceived.values().stream().mapToInt(value -> value ? 0 : 1).sum();
-                System.out.println("[Sender] Still waiting for " + remainingAcks + " ACKs...");
+                //int remainingAcks = ackReceived.values().stream().mapToInt(value -> value ? 0 : 1).sum();
+                //System.out.println("[Sender] Still waiting for " + remainingAcks + " ACKs...");
                 try {
                     // Listen for an ACK
                     socket.receive(packet);
@@ -137,17 +142,22 @@ public class Sender {
     private void resendUnacknowledgedMessages(DatagramSocket socket, InetAddress receiverAddress, int port, int m, int myId, String outputFilePath) {
         try {
             while (ackReceived.containsValue(false)) { // Keep running until all messages are acknowledged
+                int count = 0;
                 // Check for unacknowledged messages and resend them
                 for (int seqNum = 1; seqNum <= m; seqNum++) {
                     if (!ackReceived.get(seqNum)) {
                         // Resend the message if it hasn't been acknowledged
-                        System.out.println("[Sender] Resending message " + seqNum + " to receiver...");
+                        //System.out.println("[Sender] Resending message " + seqNum + " to receiver...");
+                        count++;
                         sendMessage(socket, receiverAddress, port, myId, seqNum, outputFilePath, false);
                     }
                 }
+                if (count % 100 == 0) {
+                    System.out.println("[Sender] Resent " + count + " unacknowledged messages to receiver...");
+                }
 
                 // Sleep for the timeout duration before checking again
-                Thread.sleep(TIMEOUT_MS);
+                //Thread.sleep(TIMEOUT_MS);
             }
         } catch (Exception e) {
             e.printStackTrace();

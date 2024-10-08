@@ -9,13 +9,14 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Receiver {
+import cs451.utils.Pair;
 
+public class Receiver {
     /**
      * Map to keep track of which messages have been received.
      * This can be used to ensure messages are not logged or processed multiple times.
      */
-    private ConcurrentHashMap<Integer, Boolean> messagesReceived = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Pair<Integer, Integer>, Boolean> messagesReceived = new ConcurrentHashMap<>();
 
     /**
      * Receive messages on the given port and send ACKs back to the sender.
@@ -25,6 +26,14 @@ public class Receiver {
      * @param hosts list of hosts (used to get sender's address for ACKs)
      */
     public void receiveMessages(int port, String outputFilePath, int myId, List<Host> hosts) {
+        // Delete & recreate the output file
+        try {
+            Files.deleteIfExists(Paths.get(outputFilePath));
+            Files.createFile(Paths.get(outputFilePath));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         try (DatagramSocket socket = new DatagramSocket(port)) {
             byte[] buf = new byte[256];
             DatagramPacket packet = new DatagramPacket(buf, buf.length);
@@ -40,9 +49,12 @@ public class Receiver {
                 int seqNum = Integer.parseInt(parts[1]);
 
                 // Log the message if it's the first time it's received
-                if (!messagesReceived.containsKey(seqNum)) {
+                if (!messagesReceived.containsKey(new Pair<>(senderId, seqNum))) {
+                    if(messagesReceived.size() % 100 == 0) {
+                        System.out.println("Received " + messagesReceived.size() + " messages");
+                    }
                     logMessageReceived(seqNum, senderId, outputFilePath);
-                    messagesReceived.put(seqNum, true);
+                    messagesReceived.put(new Pair<>(senderId, seqNum), true);
                 }
 
                 // Send ACK back to the sender
@@ -61,9 +73,6 @@ public class Receiver {
      */
     private void logMessageReceived(int seqNum, int senderId, String outputFilePath) throws Exception {
         String log = "d " + senderId + " " + seqNum + "\n";
-        if (!Files.exists(Paths.get(outputFilePath))) {
-            Files.createFile(Paths.get(outputFilePath));
-        }
         Files.write(Paths.get(outputFilePath), log.getBytes(), StandardOpenOption.APPEND);
     }
 
