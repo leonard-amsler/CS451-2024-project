@@ -6,14 +6,17 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
 
 public class Sender {
 
-    // Map to keep track of which messages have been acknowledged
-    private Map<Integer, Boolean> ackReceived = new ConcurrentHashMap<>();
+    // Set to keep track of which messages must be acknolwedged
+    private Map<Integer, Boolean> messageState = new ConcurrentHashMap<>();
 
     /**
      * Send m messages to the receiver with the given receiverId
@@ -37,22 +40,33 @@ public class Sender {
             InetAddress receiverAddress = InetAddress.getByName(receiver.getIp());
 
             // Initialize the map for all messages as not acknowledged yet
-            for (int seqNum = 1; seqNum <= m; seqNum++) {
-                ackReceived.put(seqNum, false);
+            for (int seqNum = 1; seqNum <= m; seqNum += Constants.BATCH_SIZE) {
+                int batchNum = seqNum/Constants.BATCH_SIZE; // Batch num is zero-indexed
+                messageState.put(batchNum, false); // One entry per batch
             }
 
-            // Start two threads:
-            // 1. One for receiving ACKs
+            // 1. Thread for receiving ACKs
             Thread ackListenerThread = new Thread(() -> listenForAcks(socket, receiverAddress, receiver.getPort()));
             ackListenerThread.start();
 
-            // 2. One for resending unacknowledged messages periodically
+            // 2. Thread for resending unacknowledged messages periodically
             Thread resendThread = new Thread(() -> resendUnacknowledgedMessages(socket, receiverAddress, receiver.getPort(), m, myId, outputFilePath));
             resendThread.start();
 
             // Send the messages initially
-            for (int seqNum = 1; seqNum <= m; seqNum++) {
-                sendMessage(socket, receiverAddress, receiver.getPort(), myId, seqNum, outputFilePath, true);
+            for (int seqNum = 1; seqNum <= m; seqNum += Constants.BATCH_SIZE) {
+                List<Integer> seqNums = new ArrayList<>();
+                int max = Math.min(seqNum + Constants.BATCH_SIZE - 1 , m);
+                for (int i = seqNum; i <= max; i++) {
+                    seqNums.add(i);
+                }
+                if (seqNums.size() != 8) {
+                    System.out.println("Sending batch with " + seqNums.size() + " messages");
+                    System.out.println("Batch num: " + seqNum/Constants.BATCH_SIZE);
+                    System.out.println("Seqnums: " + seqNums.toString());
+                }
+                int batchNum = seqNum/Constants.BATCH_SIZE;
+                sendBatchMessage(socket, receiverAddress, receiver.getPort(), myId, seqNums, batchNum, outputFilePath, true);
             }
 
             // Wait for both threads to finish
@@ -65,29 +79,49 @@ public class Sender {
     }
 
     /**
-     * Send a message with the given sequence number to the receiver
-     * @param socket the socket to send the message on
-     * @param receiverAddress the address of the receiver
-     * @param port the port to send the message on
-     * @param myId the id of the sender
-     * @param seqNum the sequence number of the message
-     * @param outputFilePath the path to the output file
-     * @param shouldWrite whether to write the send event to the output file
-     * @throws Exception if an error occurs while sending the message
+     * Sends a batch of messages via a DatagramSocket to a specified receiver address and port.
+     * The message format is "senderId batchNum seqNum1;seqNum2;seqNum3;..."
+     * Optionally logs the send event to a specified output file.
+     *
+     * @param socket           the DatagramSocket used to send the message
+     * @param receiverAddress  the InetAddress of the receiver
+     * @param port             the port number of the receiver
+     * @param myId             the sender's ID
+     * @param seqNums          the list of sequence numbers to send
+     * @param batchNum         the batch number of the message
+     * @param outputFilePath   the file path where the log should be written
+     * @param shouldWrite      a boolean flag indicating whether to log the send event
+     * @throws Exception       if an I/O error occurs
      */
-    private void sendMessage(DatagramSocket socket, InetAddress receiverAddress, int port, int myId, int seqNum, String outputFilePath, Boolean shouldWrite) throws Exception {
-        String message = myId + " " + seqNum;
-        byte[] buf = message.getBytes();
+    private void sendBatchMessage(DatagramSocket socket, InetAddress receiverAddress, int port, int myId, List<Integer> seqNums, Integer batchNum, String outputFilePath, Boolean shouldWrite) throws Exception {
+        
+        StringBuilder message = new StringBuilder(); 
+        message.append(myId).append(" ");
+        message.append(batchNum).append(" ");
+
+        for (int seqNum : seqNums) {
+            message.append(seqNum).append(";");
+        }
+
+        // Remove last ";"
+        message.deleteCharAt(message.length() - 1);
+
+        byte[] buf = message.toString().getBytes();
 
         DatagramPacket packet = new DatagramPacket(buf, buf.length, receiverAddress, port);
         socket.send(packet);
 
         // Log the send event
         if (shouldWrite) {
-            String log = "b " + seqNum + "\n";
-            Files.write(Paths.get(outputFilePath), log.getBytes(), StandardOpenOption.APPEND);
+            StringBuilder log = new StringBuilder();
+            for (int seqNum : seqNums) {
+                log.append("b ").append(seqNum).append("\n");
+            }
+            Files.write(Paths.get(outputFilePath), log.toString().getBytes(), StandardOpenOption.APPEND);
         }
     }
+
+
 
     /**
      * Thread 1: Listen for ACKs from the receiver.
@@ -101,21 +135,21 @@ public class Sender {
             byte[] buf = new byte[256];
             DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
-            while (ackReceived.containsValue(false)) { // Keep running until all messages are acknowledged
-                //int remainingAcks = ackReceived.values().stream().mapToInt(value -> value ? 0 : 1).sum();
-                //System.out.println("[Sender] Still waiting for " + remainingAcks + " ACKs...");
+            while (messageState.containsValue(false)) { // Keep running until all batches are acknowledged
                 try {
                     // Listen for an ACK
                     socket.receive(packet);
                     String receivedMessage = new String(packet.getData(), 0, packet.getLength());
+                    // Format: "ack senderId batchNum"
 
                     // Check if the message is an ACK
                     if (receivedMessage.startsWith("ack")) {
+                        
                         String[] parts = receivedMessage.split(" ");
-                        int seqNum = Integer.parseInt(parts[2]);
+                        int batchNum = Integer.parseInt(parts[2]);
 
-                        // Mark the message as acknowledged
-                        ackReceived.put(seqNum, true);
+                        // Mark the batch as acknowledged
+                        messageState.put(batchNum, true);
                     }
                 } catch (Exception e) {
                     // Handle exception (could be timeout or other network issues)
@@ -139,23 +173,22 @@ public class Sender {
      */
     private void resendUnacknowledgedMessages(DatagramSocket socket, InetAddress receiverAddress, int port, int m, int myId, String outputFilePath) {
         try {
-            while (ackReceived.containsValue(false)) { // Keep running until all messages are acknowledged
-                int count = 0;
+            while (messageState.containsValue(false)) { // Keep running until all batches are acknowledged
                 // Check for unacknowledged messages and resend them
-                for (int seqNum = 1; seqNum <= m; seqNum++) {
-                    if (!ackReceived.get(seqNum)) {
-                        // Resend the message if it hasn't been acknowledged
-                        //System.out.println("[Sender] Resending message " + seqNum + " to receiver...");
-                        count++;
-                        sendMessage(socket, receiverAddress, port, myId, seqNum, outputFilePath, false);
+                for (int batchNum : messageState.keySet()) {
+                    if (!messageState.get(batchNum)) {
+                        Integer max = Math.min((batchNum + 1) * Constants.BATCH_SIZE, m); // batch 0 => max = 8
+                        List<Integer> seqNums = new ArrayList<>();
+                        for (int i = batchNum * Constants.BATCH_SIZE + 1; i <= max; i++) {
+                            seqNums.add(i);
+                        }
+                        if (seqNums.size() != 8) {
+                            System.out.println("Received batch with " + seqNums.size() + " messages");
+                            System.out.println("Resending batch " + batchNum);
+                        }
+                        sendBatchMessage(socket, receiverAddress, port, myId, seqNums, batchNum, outputFilePath, false);
                     }
                 }
-                if (count % 100 == 0) {
-                    System.out.println("[Sender] Resent " + count + " unacknowledged messages to receiver...");
-                }
-
-                // Sleep for the timeout duration before checking again
-                //Thread.sleep(TIMEOUT_MS);
             }
         } catch (Exception e) {
             e.printStackTrace();

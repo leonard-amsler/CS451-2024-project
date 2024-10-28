@@ -42,23 +42,25 @@ public class Receiver {
                 // Receive a message
                 socket.receive(packet);
                 String receivedMessage = new String(packet.getData(), 0, packet.getLength());
+                // message format: "senderId batchNum seqNum1;seqNum2;seqNum3;..."
 
                 // Parse the sender's ID and sequence number from the message
                 String[] parts = receivedMessage.split(" ");
                 int senderId = Integer.parseInt(parts[0]);
-                int seqNum = Integer.parseInt(parts[1]);
+                int batchNum = Integer.parseInt(parts[1]);
+                String[] seqNums = parts[2].split(";");
 
                 // Log the message if it's the first time it's received
-                if (!messagesReceived.containsKey(new Pair<>(senderId, seqNum))) {
+                if (!messagesReceived.containsKey(new Pair<>(senderId, batchNum))) {
+                    messagesReceived.put(new Pair<>(senderId, batchNum), true);
                     if(messagesReceived.size() % 100 == 0) {
-                        System.out.println("Received " + messagesReceived.size() + " messages");
+                        System.out.println("Received " + messagesReceived.size() + " batches");
                     }
-                    logMessageReceived(seqNum, senderId, outputFilePath);
-                    messagesReceived.put(new Pair<>(senderId, seqNum), true);
+                    logBatchReceived(seqNums, senderId, outputFilePath);
                 }
 
                 // Send ACK back to the sender
-                sendAck(socket, packet.getAddress(), packet.getPort(), myId, seqNum);
+                sendBatchAck(socket, packet.getAddress(), packet.getPort(), myId, batchNum);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -66,26 +68,33 @@ public class Receiver {
     }
 
     /**
-     * Log the received message to the output file.
-     * @param seqNum the sequence number of the message
-     * @param senderId the ID of the sender
-     * @param outputFilePath the path to the output file for logging received messages
+     * Logs a batch of received sequence numbers to a specified output file.
+     *
+     * @param seqNums       An array of sequence numbers to be logged.
+     * @param senderId      The ID of the sender from whom the sequence numbers were received.
+     * @param outputFilePath The path to the file where the log should be written.
+     * @throws Exception    If an I/O error occurs writing to or creating the file.
      */
-    private void logMessageReceived(int seqNum, int senderId, String outputFilePath) throws Exception {
-        String log = "d " + senderId + " " + seqNum + "\n";
-        Files.write(Paths.get(outputFilePath), log.getBytes(), StandardOpenOption.APPEND);
+    private void logBatchReceived(String[] seqNums, int senderId, String outputFilePath) throws Exception {
+        StringBuilder log = new StringBuilder();
+        for (String seqNum : seqNums) {
+            log.append("d ").append(senderId).append(" ").append(seqNum).append("\n");
+        }
+        Files.write(Paths.get(outputFilePath), log.toString().getBytes(), StandardOpenOption.APPEND);
     }
 
     /**
-     * Send an acknowledgment (ACK) back to the sender for the received message.
-     * @param socket the socket to send the ACK on
-     * @param senderAddress the address of the sender
-     * @param port the port to send the ACK to
-     * @param myId the ID of the receiver (used in the ACK message)
-     * @param seqNum the sequence number of the message being acknowledged
+     * Sends a batch acknowledgment message to the specified sender.
+     *
+     * @param socket the DatagramSocket used to send the acknowledgment
+     * @param senderAddress the InetAddress of the sender to whom the acknowledgment is sent
+     * @param port the port number of the sender
+     * @param myId the identifier of the sender sending the acknowledgment
+     * @param batchNum the batch number being acknowledged
+     * @throws Exception if an I/O error occurs while sending the acknowledgment
      */
-    private void sendAck(DatagramSocket socket, InetAddress senderAddress, int port, int myId, int seqNum) throws Exception {
-        String ackMessage = "ack " + myId + " " + seqNum;
+    private void sendBatchAck(DatagramSocket socket, InetAddress senderAddress, int port, int myId, int batchNum) throws Exception {
+        String ackMessage = "ack " + myId + " " + batchNum;
         byte[] ackBuf = ackMessage.getBytes();
         DatagramPacket ackPacket = new DatagramPacket(ackBuf, ackBuf.length, senderAddress, port);
         socket.send(ackPacket);

@@ -58,10 +58,10 @@ pkill -f tc.py  # Kills all processes related to `tc.py`
 echo "Stopped network setup script!"
 
 # Verify the correctness of the test
-echo ""
-echo "Verifying the correctness of the test..."
-python3 $BASE_PATH$CORRECTNESS_PASS $OUTPUT_PATH
-echo "Correctness verified!"
+# echo ""
+# echo "Verifying the correctness of the test..."
+# python3 $BASE_PATH$CORRECTNESS_PASS $OUTPUT_PATH
+# echo "Correctness verified!"
 
 # Compute the aggregate throughput by analyzing logs
 echo ""

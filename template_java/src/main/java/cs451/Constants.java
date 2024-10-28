@@ -17,4 +17,15 @@ public class Constants {
 
     // indexes for config
     public static final int CONFIG_VALUE = 6;
+
+    public static final int BATCH_SIZE = 8; // Number of messages to send in a batch
+
+    // Send messages indexes
+    public static final int SEND_SERNDER_ID = 0;
+    public static final int SEND_BATCH_NUM = 1;
+    public static final int SEND_SEQ_NUMS = 2;
+
+    // Ack messages indexes
+    public static final int ACK_SENDER_ID = 1;
+    public static final int ACK_BATCH_NUM = 2;
 }
