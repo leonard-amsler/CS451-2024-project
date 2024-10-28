@@ -12,8 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Sender {
 
-    private static final int TIMEOUT_MS = 100; // Timeout in milliseconds (0.1 seconds)
-
     // Map to keep track of which messages have been acknowledged
     private Map<Integer, Boolean> ackReceived = new ConcurrentHashMap<>();
 
