@@ -28,4 +28,7 @@ public class Constants {
     // Ack messages indexes
     public static final int ACK_SENDER_ID = 1;
     public static final int ACK_BATCH_NUM = 2;
+
+    // Timeout
+    public static final int TIMEOUT_MS = 256;
 }

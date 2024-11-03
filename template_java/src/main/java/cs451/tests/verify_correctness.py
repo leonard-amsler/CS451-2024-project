@@ -12,7 +12,7 @@ def parse_logs(output_dir):
     # Iterate over output files in the directory
     for filename in os.listdir(output_dir):
         if filename.endswith(".output"):
-            process_id = int(filename.split('.')[0])
+            process_id = filename.split('.')[0]
             file_path = os.path.join(output_dir, filename)
             
             with open(file_path, 'r') as f:

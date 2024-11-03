@@ -53,9 +53,7 @@ public class Receiver {
                 // Log the message if it's the first time it's received
                 if (!messagesReceived.containsKey(new Pair<>(senderId, batchNum))) {
                     messagesReceived.put(new Pair<>(senderId, batchNum), true);
-                    if(messagesReceived.size() % 100 == 0) {
-                        System.out.println("Received " + messagesReceived.size() + " batches");
-                    }
+                    System.out.println("Received batch " + batchNum + " from " + senderId);
                     logBatchReceived(seqNums, senderId, outputFilePath);
                 }
 

@@ -9,14 +9,27 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
 
 public class Sender {
 
-    // Set to keep track of which messages must be acknolwedged
-    private Map<Integer, Boolean> messageState = new ConcurrentHashMap<>();
+    // Map to keep track of which message batches are awaiting acknowledgment
+    private Map<Integer, Long> messageState = new ConcurrentHashMap<>();
+
+    // Congestion control parameters
+    private static final double MAX_WINDOW_SIZE = Math.pow(2, 14); // Maximum window size (16384)
+    private static final double MIN_WINDOW_SIZE = Math.pow(2, 0); // Minimum window size (1)
+    private double windowSize = MIN_WINDOW_SIZE; // Initial window size
+
+    private static final int MAX_TIMEOUT_MS = 1024; // Maximum timeout duration
+    private static final int MIN_TIMEOUT_MS = 128; // Minimum timeout duration
+    private int timeout_ms = MIN_TIMEOUT_MS; // Initial timeout duration
+
+    // Variables for tracking acknowledgments and timeouts
+    private volatile int ackCount = 0;
+    private volatile int timeoutCount = 0;
+    private volatile int nb_consec_min = 0;
+    private volatile boolean running = true;
 
     /**
      * Send m messages to the receiver with the given receiverId
@@ -39,39 +52,49 @@ public class Sender {
             Host receiver = hosts.get(receiverId - 1); // Get the receiver host
             InetAddress receiverAddress = InetAddress.getByName(receiver.getIp());
 
-            // Initialize the map for all messages as not acknowledged yet
-            for (int seqNum = 1; seqNum <= m; seqNum += Constants.BATCH_SIZE) {
-                int batchNum = seqNum/Constants.BATCH_SIZE; // Batch num is zero-indexed
-                messageState.put(batchNum, false); // One entry per batch
-            }
-
-            // 1. Thread for receiving ACKs
-            Thread ackListenerThread = new Thread(() -> listenForAcks(socket, receiverAddress, receiver.getPort()));
+            // Thread for receiving ACKs
+            Thread ackListenerThread = new Thread(() -> listenForAcks(socket));
             ackListenerThread.start();
 
-            // 2. Thread for resending unacknowledged messages periodically
-            Thread resendThread = new Thread(() -> resendUnacknowledgedMessages(socket, receiverAddress, receiver.getPort(), m, myId, outputFilePath));
+            // Thread for resending unacknowledged messages periodically
+            Thread resendThread = new Thread(() -> resendUnacknowledgedMessages(socket, receiverAddress, receiver.getPort(), myId, outputFilePath, m));
             resendThread.start();
 
-            // Send the messages initially
-            for (int seqNum = 1; seqNum <= m; seqNum += Constants.BATCH_SIZE) {
-                List<Integer> seqNums = new ArrayList<>();
-                int max = Math.min(seqNum + Constants.BATCH_SIZE - 1 , m);
-                for (int i = seqNum; i <= max; i++) {
-                    seqNums.add(i);
+            // Thread for adjusting the window size periodically
+            Thread windowAdjustmentThread = new Thread(() -> adjustWindowSizePeriodically());
+            windowAdjustmentThread.start();
+
+            // Sliding window variables
+            int seqNum = 1;
+            while (seqNum <= m || !messageState.isEmpty()) {
+                // Check if we can send more batches
+                if (messageState.size() < windowSize && seqNum <= m) {
+                    int max = Math.min(seqNum + Constants.BATCH_SIZE - 1, m);
+                    List<Integer> seqNums = new ArrayList<>();
+                    for (int i = seqNum; i <= max; i++) {
+                        seqNums.add(i);
+                    }
+                    int batchNum = seqNum / Constants.BATCH_SIZE; // Batch num is zero-indexed
+                    messageState.put(batchNum, System.currentTimeMillis()); // Add to messageState when sending
+                    //System.out.println("Sending batch " + batchNum + " with seqnums " + seqNums.toString());
+                    sendBatchMessage(socket, receiverAddress, receiver.getPort(), myId, seqNums, batchNum, outputFilePath, true);
+                    seqNum += Constants.BATCH_SIZE;
+                } else {
+                    // Sleep briefly to allow for ACK processing and window adjustment
+                    Thread.sleep(10);
                 }
-                if (seqNums.size() != 8) {
-                    System.out.println("Sending batch with " + seqNums.size() + " messages");
-                    System.out.println("Batch num: " + seqNum/Constants.BATCH_SIZE);
-                    System.out.println("Seqnums: " + seqNums.toString());
-                }
-                int batchNum = seqNum/Constants.BATCH_SIZE;
-                sendBatchMessage(socket, receiverAddress, receiver.getPort(), myId, seqNums, batchNum, outputFilePath, true);
             }
 
-            // Wait for both threads to finish
+            // Wait for all messages to be acknowledged
+            while (!messageState.isEmpty()) {
+                Thread.sleep(10);
+            }
+
+            // Stop the running threads
+            running = false;
             ackListenerThread.join();
             resendThread.join();
+            windowAdjustmentThread.join();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -94,8 +117,8 @@ public class Sender {
      * @throws Exception       if an I/O error occurs
      */
     private void sendBatchMessage(DatagramSocket socket, InetAddress receiverAddress, int port, int myId, List<Integer> seqNums, Integer batchNum, String outputFilePath, Boolean shouldWrite) throws Exception {
-        
-        StringBuilder message = new StringBuilder(); 
+
+        StringBuilder message = new StringBuilder();
         message.append(myId).append(" ");
         message.append(batchNum).append(" ");
 
@@ -121,35 +144,35 @@ public class Sender {
         }
     }
 
-
-
     /**
-     * Thread 1: Listen for ACKs from the receiver.
-     * This thread continuously listens for ACKs and marks the messages as acknowledged.
+     * Thread for receiving ACKs from the receiver.
+     * This thread continuously listens for ACKs and removes acknowledged batches from messageState.
      * @param socket the socket to listen on
-     * @param receiverAddress the address of the receiver
-     * @param port the port to listen on
      */
-    private void listenForAcks(DatagramSocket socket, InetAddress receiverAddress, int port) {
+    private void listenForAcks(DatagramSocket socket) {
         try {
             byte[] buf = new byte[256];
             DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
-            while (messageState.containsValue(false)) { // Keep running until all batches are acknowledged
+            while (running) {
                 try {
                     // Listen for an ACK
                     socket.receive(packet);
                     String receivedMessage = new String(packet.getData(), 0, packet.getLength());
-                    // Format: "ack senderId batchNum"
+                    // Format: "ack senderId batchNum"
 
                     // Check if the message is an ACK
                     if (receivedMessage.startsWith("ack")) {
-                        
+
                         String[] parts = receivedMessage.split(" ");
                         int batchNum = Integer.parseInt(parts[2]);
 
-                        // Mark the batch as acknowledged
-                        messageState.put(batchNum, true);
+                        // Remove the batch from messageState
+                        if (messageState.containsKey(batchNum)) {
+                            messageState.remove(batchNum);
+                            ackCount++;
+                            //System.out.println("Received ACK for batch " + batchNum);
+                        }
                     }
                 } catch (Exception e) {
                     // Handle exception (could be timeout or other network issues)
@@ -162,35 +185,92 @@ public class Sender {
     }
 
     /**
-     * Thread 2: Resend unacknowledged messages periodically.
-     * This thread resends all messages that haven't been acknowledged every TIMEOUT_MS.
+     * Thread for resending unacknowledged messages periodically.
+     * This thread checks for timeouts every TIMEOUT_MS and resends unacknowledged batches.
      * @param socket the socket to resend messages on
      * @param receiverAddress the address of the receiver
      * @param port the port to resend messages on
-     * @param m the number of messages to send
      * @param myId the id of the sender
      * @param outputFilePath the path to the output file
+     * @param m the total number of messages to send
      */
-    private void resendUnacknowledgedMessages(DatagramSocket socket, InetAddress receiverAddress, int port, int m, int myId, String outputFilePath) {
+    private void resendUnacknowledgedMessages(DatagramSocket socket, InetAddress receiverAddress, int port, int myId, String outputFilePath, int m) {
         try {
-            while (messageState.containsValue(false)) { // Keep running until all batches are acknowledged
-                // Check for unacknowledged messages and resend them
-                for (int batchNum : messageState.keySet()) {
-                    if (!messageState.get(batchNum)) {
-                        Integer max = Math.min((batchNum + 1) * Constants.BATCH_SIZE, m); // batch 0 => max = 8
+            while (running) {
+                // Sleep for the timeout duration before checking for timeouts
+                Thread.sleep(timeout_ms);
+
+                long currentTime = System.currentTimeMillis();
+
+                for (Map.Entry<Integer, Long> entry : messageState.entrySet()) {
+                    int batchNum = entry.getKey();
+                    long sentTime = entry.getValue();
+
+                    // Check if the batch has timed out
+                    if (currentTime - sentTime >= timeout_ms) {
+                        Integer max = Math.min((batchNum + 1) * Constants.BATCH_SIZE, m);
                         List<Integer> seqNums = new ArrayList<>();
                         for (int i = batchNum * Constants.BATCH_SIZE + 1; i <= max; i++) {
                             seqNums.add(i);
                         }
-                        if (seqNums.size() != 8) {
-                            System.out.println("Received batch with " + seqNums.size() + " messages");
-                            System.out.println("Resending batch " + batchNum);
-                        }
+                        //System.out.println("Resending batch " + batchNum + " with seqnums " + seqNums.toString());
                         sendBatchMessage(socket, receiverAddress, port, myId, seqNums, batchNum, outputFilePath, false);
+
+                        // Update the sent time
+                        messageState.put(batchNum, currentTime);
+
+                        timeoutCount++;
                     }
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Thread for adjusting the window size periodically based on network performance.
+     * This thread wakes up every TIMEOUT_MS and adjusts the window size based on ACKs and timeouts.
+     */
+    private void adjustWindowSizePeriodically() {
+        try {
+            while (running) {
+                // Sleep for the timeout duration
+                Thread.sleep(timeout_ms);
+
+                // Adjust window size based on ACKs and timeouts
+                // Between 0% and 40% ACKs, decrease window size
+                // Between 40% and 60% ACKs, keep window size the same
+                // Between 60% and 100% ACKs, increase window size
+                double ackRate = (double) ackCount / (ackCount + timeoutCount);
+                if (ackRate < 0.4) {
+                    windowSize = Math.max(windowSize / 2, MIN_WINDOW_SIZE);
+                    System.out.println("Decreasing window size to " + windowSize);
+                } else if (ackRate > 0.6) {
+                    windowSize = Math.min(windowSize * 2, MAX_WINDOW_SIZE);
+                    System.out.println("Increasing window size to " + windowSize);
+                } else {
+                    System.out.println("Keeping window size at " + windowSize);
+                }
+
+                if (windowSize == MIN_WINDOW_SIZE) {
+                    nb_consec_min++;
+                } else {
+                    nb_consec_min = 0;
+                }
+
+                if (nb_consec_min > 3) {
+                    // increasing the timeout
+                    nb_consec_min = 0;
+                    timeout_ms = Math.min(timeout_ms * 2, MAX_TIMEOUT_MS);
+                    System.out.println("Increasing timeout to " + timeout_ms);
+                }
+
+                // Reset counters for the next interval
+                ackCount = 0;
+                timeoutCount = 0;
+            }
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
