@@ -5,7 +5,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
-public class ConfigParser {
+public class PL_ConfigParser {
 
     private String path;
     private int m; // m defines how many messages each sender process should send

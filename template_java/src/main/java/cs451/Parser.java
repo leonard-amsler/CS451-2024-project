@@ -9,7 +9,7 @@ public class Parser {
     private IdParser idParser;
     private HostsParser hostsParser;
     private OutputParser outputParser;
-    private ConfigParser configParser;
+    private PL_ConfigParser configParser;
 
     public Parser(String[] args) {
         this.args = args;
@@ -21,7 +21,7 @@ public class Parser {
         idParser = new IdParser();
         hostsParser = new HostsParser();
         outputParser = new OutputParser();
-        configParser = new ConfigParser();
+        configParser = new PL_ConfigParser();
 
         int argsNum = args.length;
         if (argsNum != Constants.ARG_LIMIT_CONFIG) {
