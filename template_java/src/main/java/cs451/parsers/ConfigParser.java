@@ -1,15 +1,14 @@
-package cs451;
+package cs451.parsers;
 
 import java.io.File;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
-public class PL_ConfigParser {
+public class ConfigParser {
 
     private String path;
     private int m; // m defines how many messages each sender process should send
-    private int i; // i is the index of the receiver process
 
     /**
      * Populate the config file
@@ -25,7 +24,6 @@ public class PL_ConfigParser {
             String line = br.readLine();
             String[] parts = line.split(" ");
             m = Integer.parseInt(parts[0]);
-            i = Integer.parseInt(parts[1]);
             return true;
         } catch (IOException e) {
             System.err.println("Error reading config file!");
@@ -50,12 +48,5 @@ public class PL_ConfigParser {
         return m;
     }
 
-    /**
-     * Get the index of the receiver process
-     * @return i
-     */
-    public int getI() {
-        return i;
-    }
-
 }
+

@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.Socket;
+import java.util.List;
+
+import cs451.parsers.Parser;
 
 public class Main {
 
@@ -56,28 +59,16 @@ public class Main {
         
         // Load config values
         int m = parser.config_m();              // Number of messages to send
-        int receiverId = parser.config_i();     // ID of the receiver process
         int myId = parser.myId();               // Current process ID
 
-        // Check if this is the receiver or sender
-        if (myId == receiverId) {
-            // Start the receiver
-            System.out.println("Starting receiver...");
-            Host myHost = parser.hosts().get(myId - 1); 
-            Receiver receiver = new Receiver();
-            receiver.receiveMessages(myHost.getPort(), parser.output(), myId, parser.hosts());
-        } else {
-            // Start the sender
-            System.out.println("Starting sender...");
-            Sender sender = new Sender();
-            sender.sendMessages(receiverId, m, parser.hosts(), parser.output(), myId);
-        }
+        Host myHost = parser.hosts().get(myId - 1);
+        PerfectLinks perfectLinks = new PerfectLinks(parser.output(), myHost, parser.hosts());
+        perfectLinks.start();
 
-        // After a process finishes broadcasting,
-        // it waits forever for the delivery of messages.
-        while (true) {
-            // Sleep for 1 hour
-            Thread.sleep(60 * 60 * 1000);
+        if(myId != 1) {
+            // Send messages
+            Host receiverHost = parser.hosts().get(0);
+            perfectLinks.sendSeqIds(receiverHost, 1, m);
         }
     }
 }

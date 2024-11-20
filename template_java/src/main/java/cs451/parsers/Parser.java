@@ -1,6 +1,9 @@
-package cs451;
+package cs451.parsers;
 
 import java.util.List;
+
+import cs451.Constants;
+import cs451.Host;
 
 public class Parser {
 
@@ -9,7 +12,7 @@ public class Parser {
     private IdParser idParser;
     private HostsParser hostsParser;
     private OutputParser outputParser;
-    private PL_ConfigParser configParser;
+    private ConfigParser configParser;
 
     public Parser(String[] args) {
         this.args = args;
@@ -21,7 +24,7 @@ public class Parser {
         idParser = new IdParser();
         hostsParser = new HostsParser();
         outputParser = new OutputParser();
-        configParser = new PL_ConfigParser();
+        configParser = new ConfigParser();
 
         int argsNum = args.length;
         if (argsNum != Constants.ARG_LIMIT_CONFIG) {
@@ -68,10 +71,6 @@ public class Parser {
 
     public String config_path() {
         return configParser.getPath();
-    }
-
-    public int config_i() {
-        return configParser.getI();
     }
 
     public int config_m() {

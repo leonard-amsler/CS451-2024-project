@@ -12,7 +12,7 @@ def parse_logs(output_dir):
     # Iterate over output files in the directory
     for filename in os.listdir(output_dir):
         if filename.endswith(".output"):
-            process_id = filename.split('.')[0]
+            process_id = int(filename.split('.')[0])
             file_path = os.path.join(output_dir, filename)
             
             with open(file_path, 'r') as f:
@@ -88,14 +88,19 @@ def verify_correctness(output_dir):
     sent, delivered = parse_logs(output_dir)
     
     # Check each rule
-    # pl1_violations = check_pl1(sent, delivered) ## Commented out to avoid PL1 violations in the case we don't have enough time to deliver all messages
+    pl1_violations = check_pl1(sent, delivered) ## Commented out to avoid PL1 violations in the case we don't have enough time to deliver all messages
     pl2_violations = check_pl2(delivered)
     pl3_violations = check_pl3(sent, delivered)
     
     # Output results
-    if not (pl2_violations or pl3_violations):
+    if not (pl1_violations or pl2_violations or pl3_violations):
         print("All checks passed. The outputs conform to the perfect links properties.")
     else:
+
+        if pl1_violations:
+            print("\nPL1 Violations (Reliable Delivery):")
+            for v in pl1_violations:
+                print(v)
         
         if pl2_violations:
             print("\nPL2 Violations (No Duplication):")
