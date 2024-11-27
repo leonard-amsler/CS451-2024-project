@@ -141,20 +141,21 @@ public class PerfectLinks {
                 // Sleep for the timeout duration
                 Thread.sleep(timeout_ms);
 
+                System.out.println("\nPerfectLinks status:");
                 //System.out.println("\nACK count: " + ackCount.get());
                 //System.out.println("Timeout count: " + timeoutCount.get());
                 //System.out.println("Window size: " + windowSize);
                 //System.out.println("Timeout: " + timeout_ms);
                 //System.out.println("Consecutive min: " + nb_consec_min.get());
-                //System.out.println("Delivered messages: " + deliveredMessages.size());
-                //System.out.println("Packets: " + packets.size());
-                //System.out.println("Queue: " + broadcastQueue.size());
+                System.out.println("Delivered messages: " + deliveredMessages.size());
+                System.out.println("Packets: " + packets.size());
+                System.out.println("Queue: " + broadcastQueue.size());
 
                 double ackRate = (double) ackCount.get() / (ackCount.get() + timeoutCount.get());
-                if (ackRate < 0.3) {
+                if (ackRate < 0.4) {
                     windowSize = Math.max(windowSize / 2, MIN_WINDOW_SIZE);
                     //System.out.println("Decreasing window size to " + windowSize);
-                } else if (ackRate > 0.7) {
+                } else if (ackRate > 0.6) {
                     windowSize = Math.min(windowSize * 2, MAX_WINDOW_SIZE);
                     //System.out.println("Increasing window size to " + windowSize);
                 } else {
@@ -296,6 +297,7 @@ public class PerfectLinks {
         // Add to the broadcast queue
         while(broadcastQueue.size() + 1000 > Constants.MAX_QUEUE_SIZE) {
             try {
+                System.out.println("Queue is full, waiting for space");
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();

@@ -19,7 +19,7 @@ public class URB {
     private final Host myHost;
     private final List<Host> hosts;
 
-    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 11); // (2^11 = 2048)
+    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 10);
 
     // Maps to keep track of the messages
     private Map<Integer, Integer> lastDelivered; // Last delivered message per initial host Id: <InitialHostId, Timestamp>
@@ -132,7 +132,17 @@ public class URB {
         }
 
         // Check that we have received acks from more than half of the hosts
-        if (ack.get(message).size() < hosts.size() / 2) {
+        if (ack.get(message).size() < Math.ceil((((double) hosts.size()) / 2))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean canDeliverWeak(Message message) {
+
+        // Check that we have received acks from more than half of the hosts
+        if (ack.get(message).size() < Math.ceil((((double) hosts.size()) / 2))) {
             return false;
         }
 
@@ -145,7 +155,8 @@ public class URB {
             // Print useful information
             System.out.println("\nChecking for deliveries");
             System.out.println("Last delivered: " + lastDelivered.toString());
-            System.out.println("Number of messages waiting for ack: " + ack.size());
+            System.out.println("Number of messages pending: " + ack.size());
+            System.out.println("Number of messages ready to be delivered: " + ack.entrySet().stream().filter(entry -> canDeliverWeak(entry.getKey())).count());
 
             // Check for all the messages
             List <Message> messagesCopy = new ArrayList<>(ack.keySet());
@@ -187,7 +198,7 @@ public class URB {
 
             // Sleep for a bit
             try {
-                Thread.sleep(1000);
+                Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -196,14 +207,14 @@ public class URB {
 
     // ------------------------------- Log messages -------------------------------
 
-    public synchronized void log_broadcast(Message message) throws Exception {
+    public void log_broadcast(Message message) throws Exception {
         StringBuilder log = new StringBuilder();
         log.append("b").append(" ");
         log.append(message.getContent()).append("\n");
         Files.write(Paths.get(outputFilePath), log.toString().getBytes(), StandardOpenOption.APPEND);
     }
 
-    public synchronized void log_deliver(Message message) throws Exception {
+    public void log_deliver(Message message) throws Exception {
         StringBuilder log = new StringBuilder();
         log.append("d").append(" ");
         log.append(message.getInitialSenderHostId()).append(" ");
