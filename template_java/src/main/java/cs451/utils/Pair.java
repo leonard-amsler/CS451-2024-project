@@ -33,7 +33,7 @@ public class Pair<T1, T2> {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Pair) {
-            Pair pair = (Pair) obj;
+            Pair<?, ?> pair = (Pair<?, ?>) obj;
             return first.equals(pair.first) && second.equals(pair.second);
         }
         return false;

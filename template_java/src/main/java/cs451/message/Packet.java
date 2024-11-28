@@ -1,8 +1,5 @@
 package cs451.message;
 
-import java.lang.reflect.Array;
-import java.util.List;
-
 import cs451.Host;
 
 /**

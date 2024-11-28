@@ -1,8 +1,5 @@
 package cs451.message;
 
-import java.util.List;
-import java.util.Set;
-
 import cs451.Host;
 
 /**

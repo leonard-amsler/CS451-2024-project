@@ -8,7 +8,6 @@ import cs451.Host;
 public class Parser {
 
     private String[] args;
-    private long pid;
     private IdParser idParser;
     private HostsParser hostsParser;
     private OutputParser outputParser;
@@ -19,7 +18,6 @@ public class Parser {
     }
 
     public void parse() {
-        pid = ProcessHandle.current().pid();
 
         idParser = new IdParser();
         hostsParser = new HostsParser();
