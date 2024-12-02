@@ -10,7 +10,7 @@ readonly PERFECT_LINKS_PATH="../example/configs/fifo-broadcast.config"
 readonly CORRECTNESS_PASS="src/main/java/cs451/tests/verify_correctness.py"
 readonly THROUGHPUT_PATH="src/main/java/cs451/tests/compute_throughput.py"
 
-readonly EXEC_TIME=300
+readonly EXEC_TIME=30
 
 # Build the application
 echo ""

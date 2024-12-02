@@ -19,7 +19,7 @@ public class URB {
     private final Host myHost;
     private final List<Host> hosts;
 
-    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 10);
+    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 15);
 
     // Maps to keep track of the messages
     private Map<Integer, Integer> lastDelivered; // Last delivered message per initial host Id: <InitialHostId, Timestamp>
@@ -84,15 +84,31 @@ public class URB {
         // Extract message data
         int initialSenderHostId = message.getInitialSenderHostId();
 
-        // Add to the ack set for the current host if we haven't already delivered the message
-        if (lastDelivered.get(initialSenderHostId) < message.getTimestamp()) {
+        // Get helper variables
+        boolean isInitialSender = initialSenderHostId == myHost.getId();
+        boolean alreadyReceived = ack.containsKey(message);
+        boolean alreadyDelivered = lastDelivered.get(initialSenderHostId) >= message.getTimestamp();
+
+        // beb broadcast if:
+        // - We are not the original sender of the message
+        // - We have not already received the message from someone else (the only integer in the ack set is the initial sender)
+        // - We have not already delivered the message
+        if (!isInitialSender && !alreadyReceived && !alreadyDelivered) {
+            beb_broadcast(message);
+        }
+
+        // Add to the ack set for the current host, receiver host and initial sender host
+        // - We have not already delivered the message
+        if (!alreadyDelivered) {
             // Add to ack
             ack.putIfAbsent(message, new HashSet<>());
             ack.get(message).add(senderHost.getId());
+            ack.get(message).add(myHost.getId());
+            ack.get(message).add(initialSenderHostId);
         }
 
-        // Broadcast the ack
-        beb_broadcast(message);
+
+
     }
 
     //------------------------ Uniform reliable broadcast ------------------------
