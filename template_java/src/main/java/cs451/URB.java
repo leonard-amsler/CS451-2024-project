@@ -19,7 +19,7 @@ public class URB {
     private final Host myHost;
     private final List<Host> hosts;
 
-    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 15);
+    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 12);
 
     // Maps to keep track of the messages
     private Map<Integer, Integer> lastDelivered; // Last delivered message per initial host Id: <InitialHostId, Timestamp>
@@ -77,12 +77,25 @@ public class URB {
         
     }
 
+    public void beb_broadcast_exclude(Message message, Set<Integer> excludedHostIds) {    
+
+        // Send the message to all the hosts except the excluded one
+        for (Host host : hosts) {
+            if (host.getId() != myHost.getId() && !excludedHostIds.contains(host.getId())) {
+                perfectLinks.pl_broadcast(message, host);
+            }
+        }
+        
+    }
+
     public void beb_deliver(Message message, Host senderHost) {
 
         //System.out.println("\nBEB Delivering message " + message.toString() + " from host " + senderHost.getId());
 
         // Extract message data
         int initialSenderHostId = message.getInitialSenderHostId();
+
+        //System.out.println("Received message " + message.getTimestamp() + " from host " + senderHost.getId() + " with initial sender " + initialSenderHostId);
 
         // Get helper variables
         boolean isInitialSender = initialSenderHostId == myHost.getId();
@@ -95,6 +108,8 @@ public class URB {
         // - We have not already delivered the message
         if (!isInitialSender && !alreadyReceived && !alreadyDelivered) {
             beb_broadcast(message);
+        } else {
+            //System.out.println("Not broadcasting message " + message.toString() + " from host " + senderHost.getId());
         }
 
         // Add to the ack set for the current host, receiver host and initial sender host
@@ -105,10 +120,13 @@ public class URB {
             ack.get(message).add(senderHost.getId());
             ack.get(message).add(myHost.getId());
             ack.get(message).add(initialSenderHostId);
+        } else {
+            //System.out.println("Not adding to ack message " + message.toString() + " from host " + senderHost.getId());
         }
 
-
-
+        if (isInitialSender) {
+            //System.out.println("Received my message back! " + message.toString());
+        }
     }
 
     //------------------------ Uniform reliable broadcast ------------------------
@@ -124,7 +142,8 @@ public class URB {
         }
 
         // Initialize the ack set for the current message
-        ack.put(message, new HashSet<>(List.of(myHost.getId())));
+        ack.put(message, new HashSet<>());
+        ack.get(message).add(myHost.getId());
 
         // Send the message to all the hosts
         beb_broadcast(message);

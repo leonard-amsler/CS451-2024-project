@@ -54,7 +54,7 @@ public class Message {
     @Override
     public String toString() {
         return "Message{" +
-                "initialSenderHost=" + initialSenderHostId +
+                "initialSenderHostId=" + initialSenderHostId +
                 ", content=" + content +
                 ", timestamp=" + timestamp +
                 '}';
