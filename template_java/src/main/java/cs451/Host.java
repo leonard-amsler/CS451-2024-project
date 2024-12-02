@@ -53,4 +53,18 @@ public class Host {
         return port;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+
+        if (!(obj instanceof Host)) {
+            return false;
+        }
+
+        Host host = (Host) obj;
+        return id == host.id && ip.equals(host.ip) && port == host.port;
+    }
+
 }

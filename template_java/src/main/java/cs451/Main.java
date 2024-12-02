@@ -59,12 +59,6 @@ public class Main {
         Host myHost = parser.hosts().get(myId - 1);
         URB urb = new URB(parser.output(), myHost, parser.hosts());
         urb.start();
-
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         
         for(int i = 1; i <= m; i++) {
             urb.urb_broadcast(new Message(myHost, Integer.toString(i), i));

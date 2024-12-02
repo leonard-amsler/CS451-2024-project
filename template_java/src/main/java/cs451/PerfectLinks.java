@@ -36,7 +36,7 @@ public class PerfectLinks {
     // Congestion control parameters
     private static final double MAX_WINDOW_SIZE = Math.pow(2, 17); // Maximum window size (131'072)
     private static final double MIN_WINDOW_SIZE = Math.pow(2, 0); // Minimum window size (1)
-    private double windowSize = MIN_WINDOW_SIZE;
+    private double windowSize = Math.pow(2, 5); // Initial window size
     private int timeout_ms = 512; // Initial timeout duration
 
     // Variables for tracking acknowledgments and timeouts
@@ -141,15 +141,15 @@ public class PerfectLinks {
                 // Sleep for the timeout duration
                 Thread.sleep(timeout_ms);
 
-                System.out.println("\nPerfectLinks status:");
+                //System.out.println("\nPerfectLinks status:");
                 //System.out.println("\nACK count: " + ackCount.get());
                 //System.out.println("Timeout count: " + timeoutCount.get());
                 //System.out.println("Window size: " + windowSize);
                 //System.out.println("Timeout: " + timeout_ms);
                 //System.out.println("Consecutive min: " + nb_consec_min.get());
-                System.out.println("Delivered messages: " + deliveredMessages.size());
-                System.out.println("Packets: " + packets.size());
-                System.out.println("Queue: " + broadcastQueue.size());
+                //System.out.println("Delivered messages: " + deliveredMessages.size());
+                //System.out.println("Packets: " + packets.size());
+                //System.out.println("Queue: " + broadcastQueue.size());
 
                 double ackRate = (double) ackCount.get() / (ackCount.get() + timeoutCount.get());
                 if (ackRate < 0.4) {
@@ -255,14 +255,22 @@ public class PerfectLinks {
                     // Extract the message and receiver
                     Message message = pair.getFirst();
                     Host receiverHost = pair.getSecond();
+                    Integer receiverId = receiverHost.getId();
                     
                     // Try to get more messages for the same receiver
                     List<Message> messagesList = new ArrayList<>();
                     messagesList.add(message);
-                    while (broadcastQueue.peek() != null && broadcastQueue.peek().getSecond().equals(receiverHost) && messagesList.size() < Constants.BATCH_SIZE) {
-                        Pair<Message, Host> nextPair = broadcastQueue.poll();
-                        messagesList.add(nextPair.getFirst());
+                    for (Pair<Message, Host> new_pair: broadcastQueue) {
+                        if (new_pair.getSecond().getId() == receiverId) {
+                            messagesList.add(new_pair.getFirst());
+                            broadcastQueue.remove(new_pair);
+                            if (messagesList.size() >= Constants.BATCH_SIZE) {
+                                break;
+                            }
+                        }
                     }
+
+                    //System.out.println("Sending " + messagesList.size() + " messages to host " + receiverId);
                     Message[] messages = messagesList.toArray(new Message[0]);
 
                     // Send the messages

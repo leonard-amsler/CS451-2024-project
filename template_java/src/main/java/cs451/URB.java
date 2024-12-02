@@ -19,7 +19,7 @@ public class URB {
     private final Host myHost;
     private final List<Host> hosts;
 
-    private static final int MAX_PENDING_SIZE = (int) Math.pow(2, 12);
+    private int MAX_PENDING_SIZE;
 
     // Maps to keep track of the messages
     private Map<Integer, Integer> lastDelivered; // Last delivered message per initial host Id: <InitialHostId, Timestamp>
@@ -46,6 +46,13 @@ public class URB {
         this.perfectLinks = new PerfectLinks(outputFilePath, myHost, hosts, this);
 
         this.checkDeliveryThread = new Thread(() -> checkForDeliveries());
+
+        int hosts_size_factoriel = 1;
+        for (int i = 1; i <= hosts.size(); i++) {
+            hosts_size_factoriel *= i;
+        }
+
+        this.MAX_PENDING_SIZE = Constants.MAX_QUEUE_SIZE / hosts_size_factoriel;
     }
 
     public void start() {
@@ -188,10 +195,10 @@ public class URB {
 
         while (true) {
             // Print useful information
-            System.out.println("\nChecking for deliveries");
-            System.out.println("Last delivered: " + lastDelivered.toString());
-            System.out.println("Number of messages pending: " + ack.size());
-            System.out.println("Number of messages ready to be delivered: " + ack.entrySet().stream().filter(entry -> canDeliverWeak(entry.getKey())).count());
+            // System.out.println("\nChecking for deliveries");
+            // System.out.println("Last delivered: " + lastDelivered.toString());
+            // System.out.println("Number of messages pending: " + ack.size());
+            // System.out.println("Number of messages ready to be delivered: " + ack.entrySet().stream().filter(entry -> canDeliverWeak(entry.getKey())).count());
 
             // Check for all the messages
             List <Message> messagesCopy = new ArrayList<>(ack.keySet());
