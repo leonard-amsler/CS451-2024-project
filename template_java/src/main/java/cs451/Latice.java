@@ -5,7 +5,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,34 +26,76 @@ public class Latice {
     // Timestamp
     private AtomicInteger current_timestamp;
 
-    // Algorithm variables for the proposer
-    private AtomicBoolean active;
-    private AtomicInteger ack_count;
-    private AtomicInteger nack_count;
-    private AtomicInteger active_proposal_number;
-    private Set<Integer> proposed_value;
+    private AtomicInteger current_round;
+    private Integer nb_rounds;
 
-    // Algorithm variables for the acceptor
-    private Set<Integer> accepted_value;
+    // Algorithm variables
+    private Map<Integer, AtomicBoolean> active = new ConcurrentHashMap<>(); // <round, active>
+    private Map<Integer, AtomicInteger> ack_count = new ConcurrentHashMap<>(); // <round, ack_count>
+    private Map<Integer, AtomicInteger> nack_count = new ConcurrentHashMap<>(); // <round, nack_count>
+    private Map<Integer, AtomicInteger> active_proposal_number = new ConcurrentHashMap<>(); // <round, active_proposal_number>
+    private Map<Integer, Set<Integer>> proposed_value = new ConcurrentHashMap<>(); // <round, proposed_value>
+    private Map<Integer, Set<Integer>> accepted_value = new ConcurrentHashMap<>(); // <round, accepted_value>
 
-    public Latice(Host myHost, List<Host> hosts, PerfectLinks perfectLinks, String outputFilePath) {
+    // Threads
+    private Thread verifyThread1;
+    private Thread verifyThread2;
+
+    public Latice(Host myHost, List<Host> hosts, String outputFilePath, int nb_rounds) {
         // Init the variables from the template
         this.myHost = myHost;
         this.hosts = hosts;
         this.F = (int) Math.floor((double) hosts.size() / 2);
-        this.perfectLinks = perfectLinks;
+        this.nb_rounds = nb_rounds;
+
+        // PerfectLinks object
         this.outputFilePath = outputFilePath;
+        this.perfectLinks = new PerfectLinks(outputFilePath, myHost, hosts, this);
 
         // Init the variables for the algorithm for the proposer
-        this.active = new AtomicBoolean(false);
-        this.ack_count = new AtomicInteger(0);
-        this.nack_count = new AtomicInteger(0);
-        this.active_proposal_number = new AtomicInteger(0);
-        this.proposed_value = new HashSet<>();
+        this.current_round = new AtomicInteger(0);
+        this.active = new ConcurrentHashMap<>();
+        this.ack_count = new ConcurrentHashMap<>();
+        this.nack_count = new ConcurrentHashMap<>();
+        this.active_proposal_number = new ConcurrentHashMap<>();
+        this.proposed_value = new ConcurrentHashMap<>();
+        this.accepted_value = new ConcurrentHashMap<>();
 
-        // Init the variables for the algorithm for the acceptor
-        this.accepted_value = new HashSet<>();
+        // Add the default values for all the rounds
+        for (int i = 0; i < nb_rounds; i++) {
+            this.active.put(i, new AtomicBoolean(false));
+            this.ack_count.put(i, new AtomicInteger(0));
+            this.nack_count.put(i, new AtomicInteger(0));
+            this.active_proposal_number.put(i, new AtomicInteger(0));
+            this.proposed_value.put(i, new HashSet<>());
+            this.accepted_value.put(i, new HashSet<>());
+        }
 
+        // Timestamp
+        this.current_timestamp = new AtomicInteger(0);
+
+        // Init the threads
+        this.verifyThread1 = new Thread(() -> verifyThread1());
+        this.verifyThread2 = new Thread(() -> verifyThread2());
+
+    }
+
+    public void start() {
+        // Start the perfect links
+        perfectLinks.start();
+
+        // Start the threads
+        this.verifyThread1.start();
+        this.verifyThread2.start();
+    }
+
+    public void stop() {
+        // Stop the perfect links
+        perfectLinks.stop();
+
+        // Stop the threads
+        this.verifyThread1.interrupt();
+        this.verifyThread2.interrupt();
     }
 
     // ----------------------------- BEB -----------------------------
@@ -62,6 +106,7 @@ public class Latice {
      * @param message The message to broadcast
      */
     public void beb_broadcast(Message message) {
+        System.out.println("BEB Broadcast: " + message.getContent());
         for (Host host : hosts) {
             if (host.getId() != myHost.getId()) {
                 perfectLinks.pl_broadcast(message, host);
@@ -76,33 +121,37 @@ public class Latice {
      * @param senderHost The host that sent the message
      */
     public void beb_deliver(Message message, Host senderHost) {
+        System.out.println("BEB Deliver: " + message.getContent());
+
         // Extract the content of the message
         String content = message.getContent();
-        String[] parts = content.split(":");
+        String[] parts = content.split("&");
 
         // Extract the message type
         String type = parts[0];
         LaticeMessageType messageType = LaticeMessageType.fromString(type);
 
+        // Round
+        int round = Integer.parseInt(parts[1]);
         int proposal_nb;
         Set<Integer> value;
         switch (messageType) {
             case PROPOSE:
                 // <proposal, Set proposed_value, Integer proposal_number>
-                proposal_nb = Integer.parseInt(parts[2]);
-                value = stringToSet(parts[1]);
-                handle_proposal(senderHost, proposal_nb, value);
+                proposal_nb = Integer.parseInt(parts[3]);
+                value = stringToSet(parts[2]);
+                handle_proposal(senderHost, round, proposal_nb, value);
                 break;
             case ACK:
                 // <ack, Integer proposal_number>
-                proposal_nb = Integer.parseInt(parts[1]);
-                handle_ack(senderHost, proposal_nb);
+                proposal_nb = Integer.parseInt(parts[2]);
+                handle_ack(senderHost, round, proposal_nb);
                 break;
             case NACK:
                 // <nack, Integer proposal_number, Set value>
-                proposal_nb = Integer.parseInt(parts[1]);
-                value = stringToSet(parts[2]);
-                handle_nack(senderHost, proposal_nb, value);
+                proposal_nb = Integer.parseInt(parts[2]);
+                value = stringToSet(parts[3]);
+                handle_nack(senderHost, round, proposal_nb, value);
                 break;
             default:
                 throw new IllegalArgumentException("Unknown message type: " + messageType);
@@ -115,11 +164,11 @@ public class Latice {
      * @param senderHost      The host that sent the message
      * @param proposal_number The proposal number
      */
-    public void handle_ack(Host senderHost, int proposal_number) {
+    public void handle_ack(Host senderHost, int round, int proposal_number) {
         // upon reception of ⟨ack, Integer proposal_number⟩ such that proposal_number = active_proposal_numberi:
         // ack_counti ← ack_counti + 1
-        if (proposal_number == active_proposal_number.get()) {
-            ack_count.incrementAndGet();
+        if (proposal_number == active_proposal_number.get(round).get()) {
+            ack_count.get(round).incrementAndGet();
         }
     }
 
@@ -130,17 +179,17 @@ public class Latice {
      * @param proposal_number The proposal number
      * @param value           The value proposed
      */
-    public void handle_nack(Host senderHost, int proposal_number, Set<Integer> value) {
+    public void handle_nack(Host senderHost, int round, int proposal_number, Set<Integer> value) {
         // upon reception of ⟨nack, Integer proposal_number, Set value⟩ such that proposal_number = active_proposal_numberi:
         // proposed_value ← proposed_value ∪ value
         // nack_counti ← nack_counti + 1
-        if (proposal_number == active_proposal_number.get()) {
-            proposed_value.addAll(value);
-            nack_count.incrementAndGet();
+        if (proposal_number == active_proposal_number.get(round).get()) {
+            proposed_value.get(round).addAll(value);
+            nack_count.get(round).incrementAndGet();
         }
     }
 
-    public void handle_proposal(Host senderHost, int proposal_number, Set<Integer> value) {
+    public void handle_proposal(Host senderHost, int round, int proposal_number, Set<Integer> value) {
         // upon reception of ⟨proposal, Set proposed_value, Integer proposal_number⟩ from proposer Pj such that accepted_valuei ⊆ proposed_value:
         // accepted_valuei ← proposed_value send ⟨ack, proposal_number⟩ to Pj
         // upon reception of ⟨proposal, Set proposed_value, Integer proposal_number⟩ from proposer Pj such that accepted_valuei ̸⊆ proposed_value:
@@ -148,7 +197,7 @@ public class Latice {
 
         // Check if the proposed value is included in the accepted value
         boolean included = true;
-        for (Integer val : accepted_value) {
+        for (Integer val : accepted_value.get(round)) {
             if (!value.contains(val)) {
                 included = false;
                 break;
@@ -158,19 +207,19 @@ public class Latice {
         Message message;
         if (included) {
             // accepted_valuei ← proposed_value
-            accepted_value = value;
+            accepted_value.put(round, value);
 
             // Create the message
             LaticeMessageType type = LaticeMessageType.ACK;
-            String content = type.toString() + ":" + proposal_number;
+            String content = type.toString() + "&" + round + "&" + proposal_number;
             message = new Message(myHost, content, current_timestamp.incrementAndGet());
         } else {
             // accepted_valuei ← accepted_valuei ∪ proposed_value
-            accepted_value.addAll(value);
+            accepted_value.get(round).addAll(value);
 
             // Create the message
             LaticeMessageType type = LaticeMessageType.NACK;
-            String content = type.toString() + ":" + proposal_number + ":" + setToString(accepted_value);
+            String content = type.toString() + "&" + round + "&" + proposal_number + "&" + setToString(accepted_value.get(round));
             message = new Message(myHost, content, current_timestamp.incrementAndGet());
         }
 
@@ -184,17 +233,38 @@ public class Latice {
      * Propose a new value
      * 
      * @param proposal The proposed value
+     * @param round    The round number
      */
-    public void propose(Set<Integer> proposal) {
-        this.proposed_value = proposal;
-        this.active.set(true);
-        this.active_proposal_number.incrementAndGet();
-        this.ack_count.set(0);
-        this.nack_count.set(0);
+    public void propose(Set<Integer> proposal, int round) {
+        //  Verify that there is no active rounds
+        boolean active_round = true;
+        while (active_round) {
+            active_round = false;
+            for (int r = 0; r < nb_rounds; r++) {
+                if (active.get(r).get()) {
+                    active_round = true;
+                    break;
+                }
+            }
+            if (active_round) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        // Set the proposed value for the round
+        this.proposed_value.put(round, proposal);
+        this.active.get(round).set(true);
+        this.active_proposal_number.get(round).getAndIncrement();
+        this.ack_count.get(round).set(0);
+        this.nack_count.get(round).set(0);
 
         // Create the message
         LaticeMessageType type = LaticeMessageType.PROPOSE;
-        String content = type.toString() + ":" + setToString(proposal) + ":" + active_proposal_number.toString();
+        String content = type.toString() + "&" + round + "&" + setToString(proposal) + "&" + active_proposal_number.get(round).toString();
         Message message = new Message(myHost, content, current_timestamp.incrementAndGet());
 
         // Broadcast the message
@@ -210,18 +280,29 @@ public class Latice {
         // ack_counti ← 0
         // nack_counti ← 0
         // trigger beb.broadcast(⟨proposal, proposed_valuei, active_proposal_numberi⟩)
-        if (nack_count.get() > 0 && ack_count.get() + nack_count.get() >= F + 1 && active.get()) {
-            active_proposal_number.incrementAndGet();
-            ack_count.set(0);
-            nack_count.set(0);
+        while (true) {
+            // Sleep for a while
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                return;
+            }
 
-            // Create the message
-            LaticeMessageType type = LaticeMessageType.PROPOSE;
-            String content = type.toString() + ":" + setToString(proposed_value) + ":" + active_proposal_number.toString();
-            Message message = new Message(myHost, content, current_timestamp.incrementAndGet());
+            for (int r = 0; r < nb_rounds; r++) {
+                if (nack_count.get(r).get() > 0 && ack_count.get(r).get() + nack_count.get(r).get() >= F + 1 && active.get(r).get()) {
+                    active_proposal_number.get(r).incrementAndGet();
+                    ack_count.get(r).set(0);
+                    nack_count.get(r).set(0);
 
-            // Broadcast the message
-            beb_broadcast(message);
+                    // Create the message
+                    LaticeMessageType type = LaticeMessageType.PROPOSE;
+                    String content = type.toString() + "&" + r + "&" + setToString(proposed_value.get(r)) + "&" + active_proposal_number.get(r).toString();
+                    Message message = new Message(myHost, content, current_timestamp.incrementAndGet());
+
+                    // Broadcast the message
+                    beb_broadcast(message);
+                }
+            }
         }
     }
 
@@ -231,12 +312,23 @@ public class Latice {
     public void verifyThread2() {
         // upon ack_counti ≥ f + 1 and activei = true:
         // trigger decide(proposed_valuei) activei ← false
-        if (ack_count.get() >= F + 1 && active.get()) {
-            active.set(false);
+        while (true) {
+            // Sleep for a while
             try {
-                decide(proposed_value);
-            } catch (Exception e) {
-                e.printStackTrace();
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                return;
+            }
+
+            for (int r = 0; r < nb_rounds; r++) {
+                if (ack_count.get(r).get() >= F + 1 && active.get(r).get()) {
+                    active.get(r).set(false);
+                    try {
+                        decide(proposed_value.get(r));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         }
     }
@@ -290,7 +382,7 @@ public class Latice {
      */
     private void decide(Set<Integer> proposal) throws Exception {
         Character delimiter = ' ';
-        Files.write(Paths.get(this.outputFilePath), setToString(proposal, delimiter).getBytes(), StandardOpenOption.APPEND);
+        Files.write(Paths.get(this.outputFilePath), (setToString(proposal, delimiter) + "\n").getBytes(), StandardOpenOption.APPEND);
     }
 
 }

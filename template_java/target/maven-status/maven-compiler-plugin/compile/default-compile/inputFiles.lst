@@ -1,14 +1,15 @@
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/Main.java
-/home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/MainM1.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/utils/Pair.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/parsers/HostsParser.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/parsers/IdParser.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/message/PacketType.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/Constants.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/PerfectLinks.java
+/home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/Latice.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/URB.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/message/Message.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/message/Packet.java
+/home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/message/LaticeMessageType.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/parsers/OutputParser.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/parsers/ConfigParser.java
 /home/dcl/Desktop/CS451-2024-project/template_java/src/main/java/cs451/message/PacketParser.java

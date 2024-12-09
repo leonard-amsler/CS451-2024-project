@@ -1,6 +1,8 @@
 package cs451.parsers;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import cs451.Constants;
 import cs451.Host;
@@ -71,8 +73,20 @@ public class Parser {
         return configParser.getPath();
     }
 
-    public int config_m() {
-        return configParser.getM();
+    public Integer config_p() {
+        return configParser.getP();
+    }
+
+    public Integer config_vs() {
+        return configParser.getVs();
+    }
+
+    public Integer config_ds() {
+        return configParser.getDs();
+    }
+
+    public List<Set<Integer>> config_proposals() {
+        return configParser.getProposals();
     }
 
 }

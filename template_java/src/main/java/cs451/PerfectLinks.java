@@ -210,8 +210,9 @@ public class PerfectLinks {
                     for (Message message : packet.getMessages()) {
                         if (deliveredMessages.add(message)) {
                             // The message was not already delivered
-                            if (parentURB == null)
+                            if (parentURB == null && parentLatice == null) {
                                 logDeliveredMessage(message, packet.getSenderHost().getId());
+                            }
                         }
 
                         if (parentURB != null) {
@@ -282,7 +283,7 @@ public class PerfectLinks {
                     // Send the packet
                     try {
                         sendPacket(packet);
-                        if (parentURB == null) {
+                        if (parentURB == null && parentLatice == null) {
                             logBroadcastPacket(packet);
                         }
                     } catch (Exception e) {

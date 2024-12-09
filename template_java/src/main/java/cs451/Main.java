@@ -1,5 +1,8 @@
 package cs451;
 
+import java.util.List;
+import java.util.Set;
+
 import cs451.message.Message;
 import cs451.parsers.Parser;
 
@@ -53,15 +56,22 @@ public class Main {
         System.out.println(parser.config_path() + "\n");
 
         // Load config values
-        int m = parser.config_m(); // Number of messages to send
-        int myId = parser.myId(); // Current process ID
-
+        int p = parser.config_p();
+        int vs = parser.config_vs();
+        int ds = parser.config_ds();
+        List<Set<Integer>> proposals = parser.config_proposals();
+        int myId = parser.myId();
         Host myHost = parser.hosts().get(myId - 1);
-        URB urb = new URB(parser.output(), myHost, parser.hosts());
-        urb.start();
 
-        for (int i = 1; i <= m; i++) {
-            urb.urb_broadcast(new Message(myHost, Integer.toString(i), i));
+        Latice latice = new Latice(myHost, parser.hosts(), parser.output(), parser.config_p());
+        latice.start();
+
+        // for (Set<Integer> proposal : proposals) {
+        // latice.propose(proposal);
+        // }
+
+        for (int i = 0; i < p; i++) {
+            latice.propose(proposals.get(i), i);
         }
 
         while (true) {

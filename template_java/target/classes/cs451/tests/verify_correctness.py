@@ -253,9 +253,140 @@ def verify_correctness_fifo(output_dir):
     else:
         print("\nNo FRB5 violations detected.")
 
+# ------------------------------- Lattice Agreement -------------------------------
+def parseLaticeLogs(output_dir):
+    decided = defaultdict(list)
+    for filename in os.listdir(output_dir):
+        if filename.endswith(".output"):
+            process_id = int(filename.split('.')[0])
+            file_path = os.path.join(output_dir, filename)
+            with open(file_path, 'r') as f:
+                for line in f:
+                    tokens = list(map(int, line.strip().split()))
+                    decided[process_id].append(tokens)
+    
+    return decided
+
+def parseLaticeConfig(config_dir):
+    configs = defaultdict(list)
+    for filename in os.listdir(config_dir):
+        if filename.endswith(".config") and filename.startswith("lattice-agreement"):
+            process_id = int(filename.split('-')[2].split('.')[0])
+            file_path = os.path.join(config_dir, filename)
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+                rounds, max_proposal, max_diff_proposal = map(int, lines[0].strip().split())
+                proposals = []
+                for line in lines[1:]:
+                    proposals.append(list(map(int, line.strip().split())))
+                configs[process_id] = (rounds, max_proposal, max_diff_proposal, proposals)
+    return configs
+
+def issubset(a, b):
+    return all(x in set(b) for x in set(a))
+
+def check_la1(decided, configs):
+    """
+    Check for LA1: Validity: Let a process Pi decide a set Oi, then Ii ⊆ Oi and Oi ⊆ Union of all Ij
+    """
+    violations = []
+    all_proposals = set()
+    for process_id, values in decided.items():
+        _, _, _, proposals = configs[process_id]
+
+        for d_value in values:
+            for value in proposals:
+                all_proposals.update(value)
+                if d_value not in values:
+                    violations.append(f"LA1 Violation: Process {process_id} decided values {values} but proposed value {value} is not in the decided values.")
+
+    for process_id, values in decided.items():
+        for value in values:
+            if not issubset(value, all_proposals):
+                violations.append(f"LA1 Violation: Process {process_id} decided values {value} that are not in the union of all proposals.")
+
+    return violations
+
+def check_la2(decided):
+    """
+    Check for LA2: Consistency: Let a process Pi decide a set Oi and let a process Pj decide a set Oj, then Oi ⊆ Oj or Oi ⊃ Oj
+    """
+    violations = []
+    for process_id, values in decided.items():
+            for other_process_id, other_decided_values in decided.items():
+                for i in range(len(values)):
+                    if process_id == other_process_id:
+                        continue
+                    if not issubset(values[i], other_decided_values[i]) and not issubset(other_decided_values[i], values[i]):
+                        violations.append(f"LA2 Violation: Process {process_id} decided on {values[i]} and process {other_process_id} decided on {other_decided_values[i]} but they are not subsets of each other.")
+                
+    return violations
+
+def check_la3(decided, configs):
+    """
+    Check for LA3: Termination: Every correct process eventually decides.
+    """
+    violations = []
+    for process_id, values in decided.items():
+        rounds, _, _, _ = configs[process_id]
+        if len(values) < rounds:
+            violations.append(f"LA3 Violation: Process {process_id} decided on {len(values)} values but expected {rounds}.")
+    return violations
+
+def verify_correctness_lattice(output_dir, config_dir):
+    """
+    Main function to verify correctness based on Lattice Agreement rules.
+    """
+    configs = parseLaticeConfig(config_dir)
+    decided = parseLaticeLogs(output_dir)
+
+    print("\nChecking Lattice Agreement properties...")
+    print("   Configurations:")
+    for process_id, config in configs.items():
+        print(f"      Process {process_id}: {config}")
+    print("   Decided values:")
+    for process_id, values in decided.items():
+        print(f"      Process {process_id}: {values}")
+
+    # Pi: Process i
+    # Ii: Set of values proposed by Pi
+    # Oi: Set of values decided by Pi
+    # LA1: Validity: Let a process Pi decide a set Oi, then Ii ⊆ Oi and Oi ⊆ Union of all Ij
+    # LA2: Consistency: Let a process Pi decide a set Oi and let a process Pj decide a set Oj, then Oi ⊆ Oj or Oi ⊃ Oj
+    # LA3: Termination: Every correct process eventually decides.
+
+    # Check each rule
+    print()
+    la1_violations = check_la1(decided, configs)
+    if la1_violations:
+        print("\nLA1 Violations:")
+        for violation in la1_violations:
+            print(violation)
+    else:
+        print("No LA1 violations detected.")
+    
+    la2_violations = check_la2(decided)
+    if la2_violations:
+        print("\nLA2 Violations:")
+        for violation in la2_violations:
+            print(violation)
+    else:
+        print("No LA2 violations detected.")
+    
+    la3_violations = check_la3(decided, configs)
+    if la3_violations:
+        print("\nLA3 Violations:")
+        for violation in la3_violations:
+            print(violation)
+    else:
+        print("No LA3 violations detected.")
+    print()
+
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python verify_correctness.py <type> <output_directory>")
+    if len(sys.argv) < 3:
+        print("Usage: python verify_correctness.py FIFO <output_directory>")
+        print("       python verify_correctness.py PL <output_directory>")
+        print("       python verify_correctness.py LATICE <output_directory> <config_directory>")
         sys.exit(1)
 
     output_directory = sys.argv[2]
@@ -268,6 +399,8 @@ if __name__ == "__main__":
         verify_correctness_pl(output_directory)
     elif type == "FIFO":
         verify_correctness_fifo(output_directory)
+    elif type == "LATICE":
+        verify_correctness_lattice(output_directory, sys.argv[3])
     else:
         print("Error: Invalid type. Choose either 'PL' or 'FIFO'.")
         sys.exit(1)
