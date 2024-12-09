@@ -35,8 +35,8 @@ public class PerfectLinks {
 
     // Congestion control parameters
     private static final double MAX_WINDOW_SIZE = Math.pow(2, 17); // Maximum window size (131'072)
-    private static final double MIN_WINDOW_SIZE = Math.pow(2, 0); // Minimum window size (1)
-    private double windowSize = Math.pow(2, 5); // Initial window size
+    private static final double MIN_WINDOW_SIZE = Math.pow(2, 1); // Minimum window size (1)
+    private double windowSize = Math.pow(2, 8); // Initial window size (256)
     private int timeout_ms = 512; // Initial timeout duration
 
     // Variables for tracking acknowledgments and timeouts
@@ -66,6 +66,7 @@ public class PerfectLinks {
 
     // Parent
     private URB parentURB;
+    private Latice parentLatice;
 
     /**
      * Constructor for the PerfectLinks class.
@@ -76,6 +77,17 @@ public class PerfectLinks {
     public PerfectLinks(String outputFilePath, Host myHost, List<Host> hosts, URB parentURB) {
         this(outputFilePath, myHost, hosts);
         this.parentURB = parentURB;
+    }
+
+    /**
+     * Constructor for the PerfectLinks class.
+     * @param outputFilePath the path to the output file
+     * @param myHost the host running the process
+     * @param hosts the list of all hosts in the system
+     */
+    public PerfectLinks(String outputFilePath, Host myHost, List<Host> hosts, Latice parentLatice) {
+        this(outputFilePath, myHost, hosts);
+        this.parentLatice = parentLatice;
     }
 
     /**
@@ -141,25 +153,11 @@ public class PerfectLinks {
                 // Sleep for the timeout duration
                 Thread.sleep(timeout_ms);
 
-                //System.out.println("\nPerfectLinks status:");
-                //System.out.println("\nACK count: " + ackCount.get());
-                //System.out.println("Timeout count: " + timeoutCount.get());
-                //System.out.println("Window size: " + windowSize);
-                //System.out.println("Timeout: " + timeout_ms);
-                //System.out.println("Consecutive min: " + nb_consec_min.get());
-                //System.out.println("Delivered messages: " + deliveredMessages.size());
-                //System.out.println("Packets: " + packets.size());
-                //System.out.println("Queue: " + broadcastQueue.size());
-
                 double ackRate = (double) ackCount.get() / (ackCount.get() + timeoutCount.get());
                 if (ackRate < 0.4) {
                     windowSize = Math.max(windowSize / 2, MIN_WINDOW_SIZE);
-                    //System.out.println("Decreasing window size to " + windowSize);
                 } else if (ackRate > 0.6) {
                     windowSize = Math.min(windowSize * 2, MAX_WINDOW_SIZE);
-                    //System.out.println("Increasing window size to " + windowSize);
-                } else {
-                    //System.out.println("Keeping window size at " + windowSize);
                 }
 
                 // Reset counters for the next interval
@@ -191,15 +189,12 @@ public class PerfectLinks {
                 // Convert to packet
                 Packet packet = packetParser.parse(content);
 
-                //System.out.println("\nReceived packet " + packet.toString());
-
                 // If the message is an ACK, remove the batch from messageState
                 if(packet.getPacketType() == PacketType.ACK){
-                    //System.out.println("Received ACK message" + packet.toString());
-
                     // Remove the packet from the packets map
                     packets.remove(packet.getPacketNumber());
 
+                    // Notify the processQueue thread that a packet has been removed
                     synchronized (packets) {
                         packets.notifyAll();
                     }
@@ -208,7 +203,6 @@ public class PerfectLinks {
                     ackCount.incrementAndGet();
 
                 } else if (packet.getPacketType() == PacketType.SEND) {
-                    //System.out.println("Received SEND message\n" + message.toString());
 
                     // Deliver the message if it hasn't been delivered yet
                     for (Message message: packet.getMessages()) {
@@ -220,11 +214,14 @@ public class PerfectLinks {
                         if (parentURB != null) {
                             parentURB.beb_deliver(message, packet.getSenderHost());
                         }
+
+                        if (parentLatice != null) {
+                            parentLatice.beb_deliver(message, packet.getSenderHost());
+                        }
                     }
 
+                    // Send an acknowledgment to the sender
                     sendAck(packet);
-                } else {
-                    //System.out.println("Received unknown message type: " + message.getType());
                 }
 
             } catch (Exception e) {
@@ -270,7 +267,6 @@ public class PerfectLinks {
                         }
                     }
 
-                    //System.out.println("Sending " + messagesList.size() + " messages to host " + receiverId);
                     Message[] messages = messagesList.toArray(new Message[0]);
 
                     // Send the messages
@@ -305,7 +301,6 @@ public class PerfectLinks {
         // Add to the broadcast queue
         while(broadcastQueue.size() + 1000 > Constants.MAX_QUEUE_SIZE) {
             try {
-                System.out.println("Queue is full, waiting for space");
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -332,7 +327,6 @@ public class PerfectLinks {
      * @throws Exception
      */
     private void sendPacket(Packet packet) throws Exception {
-        //System.out.println("\nSending packet " + packet.toString());
 
         // Get the buffer to send
         byte[] buf = packet.toBytes();

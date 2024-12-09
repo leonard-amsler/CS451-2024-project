@@ -14,6 +14,12 @@ public class Message {
     String content;
     int timestamp;
 
+    /**
+     * Constructor for the Message class
+     * @param initialSenderHost The host that initially sent the message
+     * @param content The content of the message
+     * @param timestamp The timestamp of the message
+     */
     public Message(Host initialSenderHost, String content, int timestamp) {
         this.initialSenderHostId = initialSenderHost.getId();
         this.content = content;

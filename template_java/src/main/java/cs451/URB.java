@@ -18,7 +18,6 @@ public class URB {
     private final String outputFilePath;
     private final Host myHost;
     private final List<Host> hosts;
-
     private int MAX_PENDING_SIZE;
 
     // Maps to keep track of the messages
@@ -31,41 +30,53 @@ public class URB {
     // Thread to check for deliveries
     private Thread checkDeliveryThread;
     
+    /**
+     * Constructor for the URB class
+     * @param outputFilePath The path to the output file
+     * @param myHost The host that is running the URB
+     * @param hosts The list of all the hosts in the system
+     */
     public URB(String outputFilePath, Host myHost, List<Host> hosts) {
         this.outputFilePath = outputFilePath;
         this.myHost = myHost;
         this.hosts = hosts;
 
+        // Initialize lastDelivered map
         this.lastDelivered = new ConcurrentHashMap<>();
         for (Host host : hosts) {
             lastDelivered.put(host.getId(), 0);
         }
 
+        // Initialize ack map
         this.ack = new ConcurrentHashMap<>();
 
+        // Initialize the perfect links
         this.perfectLinks = new PerfectLinks(outputFilePath, myHost, hosts, this);
 
+        // Initialize the thread to check for deliveries
         this.checkDeliveryThread = new Thread(() -> checkForDeliveries());
 
+        // Set the maximum pending size
         int hosts_size_factoriel = 1;
         for (int i = 1; i <= hosts.size(); i++) {
             hosts_size_factoriel *= i;
         }
-
         this.MAX_PENDING_SIZE = Constants.MAX_QUEUE_SIZE / hosts_size_factoriel;
     }
 
+    /**
+     * Start the URB
+     */
     public void start() {
-        System.out.println("Starting URB");
-
         // Start the perfect links
         perfectLinks.start();
         checkDeliveryThread.start();
     }
 
+    /**
+     * Stop the URB
+     */
     public void stop() {
-        System.out.println("Stopping URB");
-
         // Stop the perfect links
         perfectLinks.stop();
         checkDeliveryThread.interrupt();
@@ -73,36 +84,27 @@ public class URB {
 
     // ------------------------- Best effort broadcast -------------------------
 
+    /**
+     * Broadcast a message to all the hosts, except the current host
+     * @param message The message to broadcast
+     */
     public void beb_broadcast(Message message) {    
-
-        // Send the message to all the hosts
         for (Host host : hosts) {
             if (host.getId() != myHost.getId()) {
                 perfectLinks.pl_broadcast(message, host);
             }
         }
-        
     }
 
-    public void beb_broadcast_exclude(Message message, Set<Integer> excludedHostIds) {    
-
-        // Send the message to all the hosts except the excluded one
-        for (Host host : hosts) {
-            if (host.getId() != myHost.getId() && !excludedHostIds.contains(host.getId())) {
-                perfectLinks.pl_broadcast(message, host);
-            }
-        }
-        
-    }
-
+    /**
+     * Deliver a message to the URB, to be called by the perfect links
+     * @param message The message to deliver
+     * @param senderHost The host that sent the message
+     */
     public void beb_deliver(Message message, Host senderHost) {
-
-        //System.out.println("\nBEB Delivering message " + message.toString() + " from host " + senderHost.getId());
 
         // Extract message data
         int initialSenderHostId = message.getInitialSenderHostId();
-
-        //System.out.println("Received message " + message.getTimestamp() + " from host " + senderHost.getId() + " with initial sender " + initialSenderHostId);
 
         // Get helper variables
         boolean isInitialSender = initialSenderHostId == myHost.getId();
@@ -115,31 +117,27 @@ public class URB {
         // - We have not already delivered the message
         if (!isInitialSender && !alreadyReceived && !alreadyDelivered) {
             beb_broadcast(message);
-        } else {
-            //System.out.println("Not broadcasting message " + message.toString() + " from host " + senderHost.getId());
         }
 
         // Add to the ack set for the current host, receiver host and initial sender host
         // - We have not already delivered the message
         if (!alreadyDelivered) {
-            // Add to ack
             ack.putIfAbsent(message, new HashSet<>());
-            ack.get(message).add(senderHost.getId());
-            ack.get(message).add(myHost.getId());
-            ack.get(message).add(initialSenderHostId);
-        } else {
-            //System.out.println("Not adding to ack message " + message.toString() + " from host " + senderHost.getId());
-        }
-
-        if (isInitialSender) {
-            //System.out.println("Received my message back! " + message.toString());
+            ack.get(message).add(senderHost.getId()); // Add the sender host id
+            ack.get(message).add(myHost.getId()); // Add the receiver host id
+            ack.get(message).add(initialSenderHostId); // Add the initial sender host id
         }
     }
 
     //------------------------ Uniform reliable broadcast ------------------------
 
+    /**
+     * Broadcast a message to all the hosts and log it
+     * @param message The message to broadcast
+     */
     public void urb_broadcast(Message message) {
 
+        // Wait until the pending size is below the maximum
         while (ack.size() > MAX_PENDING_SIZE) {
             try {
                 Thread.sleep(100);
@@ -165,6 +163,11 @@ public class URB {
 
     // ----------------------------- Helper functions -----------------------------
 
+    /**
+     * Check if a message can be delivered
+     * @param message The message to check
+     * @return True if the message can be delivered, false otherwise
+     */
     private boolean canDeliver(Message message) {
 
         // Check that we have already delivered the message with the previous timestamp
@@ -181,26 +184,14 @@ public class URB {
         return true;
     }
 
-    private boolean canDeliverWeak(Message message) {
-
-        // Check that we have received acks from more than half of the hosts
-        if (ack.get(message).size() < Math.ceil((((double) hosts.size()) / 2))) {
-            return false;
-        }
-
-        return true;
-    }
-
+    /**
+     * Check for deliveries and deliver the messages if possible
+     */
     private void checkForDeliveries() {
 
         while (true) {
-            // Print useful information
-            // System.out.println("\nChecking for deliveries");
-            // System.out.println("Last delivered: " + lastDelivered.toString());
-            // System.out.println("Number of messages pending: " + ack.size());
-            // System.out.println("Number of messages ready to be delivered: " + ack.entrySet().stream().filter(entry -> canDeliverWeak(entry.getKey())).count());
 
-            // Check for all the messages
+            // Make a copy of the ack set
             List <Message> messagesCopy = new ArrayList<>(ack.keySet());
 
             // Group the messages by initial sender host id
@@ -211,7 +202,7 @@ public class URB {
             });
 
             // Sort the messages by timestamp
-            // The goal is to be able to deliver also the messages that were received out of order, after delivering the missing ones
+            // The goal is to deliver the messages in order, without the need of relooping
             messagesByHost.forEach((hostId, messages) -> {
                 messages.sort((m1, m2) -> m1.getTimestamp() - m2.getTimestamp());
             });
@@ -249,6 +240,11 @@ public class URB {
 
     // ------------------------------- Log messages -------------------------------
 
+    /**
+     * Log a broadcast message
+     * @param message The message to log
+     * @throws Exception If the file cannot be written to
+     */
     public void log_broadcast(Message message) throws Exception {
         StringBuilder log = new StringBuilder();
         log.append("b").append(" ");
@@ -256,6 +252,11 @@ public class URB {
         Files.write(Paths.get(outputFilePath), log.toString().getBytes(), StandardOpenOption.APPEND);
     }
 
+    /**
+     * Log a deliver message
+     * @param message The message to log
+     * @throws Exception If the file cannot be written to
+     */
     public void log_deliver(Message message) throws Exception {
         StringBuilder log = new StringBuilder();
         log.append("d").append(" ");
