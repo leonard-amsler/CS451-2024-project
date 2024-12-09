@@ -1,5 +1,8 @@
 package cs451;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,13 +18,12 @@ public class Latice {
     private final Host myHost;
     private final List<Host> hosts;
     private final int F;
-
-    // PerfectLinks object
     private PerfectLinks perfectLinks;
+    private final String outputFilePath;
 
     // Timestamp
     private AtomicInteger current_timestamp;
-    
+
     // Algorithm variables for the proposer
     private AtomicBoolean active;
     private AtomicInteger ack_count;
@@ -32,12 +34,13 @@ public class Latice {
     // Algorithm variables for the acceptor
     private Set<Integer> accepted_value;
 
-    public Latice(Host myHost, List<Host> hosts, PerfectLinks perfectLinks) {
+    public Latice(Host myHost, List<Host> hosts, PerfectLinks perfectLinks, String outputFilePath) {
         // Init the variables from the template
         this.myHost = myHost;
         this.hosts = hosts;
         this.F = (int) Math.floor((double) hosts.size() / 2);
         this.perfectLinks = perfectLinks;
+        this.outputFilePath = outputFilePath;
 
         // Init the variables for the algorithm for the proposer
         this.active = new AtomicBoolean(false);
@@ -48,15 +51,17 @@ public class Latice {
 
         // Init the variables for the algorithm for the acceptor
         this.accepted_value = new HashSet<>();
+
     }
 
     // ----------------------------- BEB -----------------------------
 
     /**
      * Broadcast a message to all the hosts, except the current host
+     * 
      * @param message The message to broadcast
      */
-    public void beb_broadcast(Message message) {    
+    public void beb_broadcast(Message message) {
         for (Host host : hosts) {
             if (host.getId() != myHost.getId()) {
                 perfectLinks.pl_broadcast(message, host);
@@ -66,7 +71,8 @@ public class Latice {
 
     /**
      * Deliver a message to the algorithm
-     * @param message The message to deliver
+     * 
+     * @param message    The message to deliver
      * @param senderHost The host that sent the message
      */
     public void beb_deliver(Message message, Host senderHost) {
@@ -82,18 +88,18 @@ public class Latice {
         Set<Integer> value;
         switch (messageType) {
             case PROPOSE:
-                //<proposal, Set proposed_value, Integer proposal_number>
+                // <proposal, Set proposed_value, Integer proposal_number>
                 proposal_nb = Integer.parseInt(parts[2]);
                 value = stringToSet(parts[1]);
                 handle_proposal(senderHost, proposal_nb, value);
                 break;
             case ACK:
-                //<ack, Integer proposal_number>
+                // <ack, Integer proposal_number>
                 proposal_nb = Integer.parseInt(parts[1]);
                 handle_ack(senderHost, proposal_nb);
                 break;
             case NACK:
-                //<nack, Integer proposal_number, Set value>
+                // <nack, Integer proposal_number, Set value>
                 proposal_nb = Integer.parseInt(parts[1]);
                 value = stringToSet(parts[2]);
                 handle_nack(senderHost, proposal_nb, value);
@@ -103,14 +109,15 @@ public class Latice {
         }
     }
 
-        /**
+    /**
      * Handle the reception of a propose message
-     * @param senderHost The host that sent the message
+     * 
+     * @param senderHost      The host that sent the message
      * @param proposal_number The proposal number
      */
     public void handle_ack(Host senderHost, int proposal_number) {
         // upon reception of ⟨ack, Integer proposal_number⟩ such that proposal_number = active_proposal_numberi:
-        //    ack_counti ← ack_counti + 1
+        // ack_counti ← ack_counti + 1
         if (proposal_number == active_proposal_number.get()) {
             ack_count.incrementAndGet();
         }
@@ -118,14 +125,15 @@ public class Latice {
 
     /**
      * Handle the reception of a propose message
-     * @param senderHost The host that sent the message
+     * 
+     * @param senderHost      The host that sent the message
      * @param proposal_number The proposal number
-     * @param value The value proposed
+     * @param value           The value proposed
      */
     public void handle_nack(Host senderHost, int proposal_number, Set<Integer> value) {
         // upon reception of ⟨nack, Integer proposal_number, Set value⟩ such that proposal_number = active_proposal_numberi:
-        //      proposed_value ← proposed_value ∪ value
-        //      nack_counti ← nack_counti + 1
+        // proposed_value ← proposed_value ∪ value
+        // nack_counti ← nack_counti + 1
         if (proposal_number == active_proposal_number.get()) {
             proposed_value.addAll(value);
             nack_count.incrementAndGet();
@@ -134,9 +142,9 @@ public class Latice {
 
     public void handle_proposal(Host senderHost, int proposal_number, Set<Integer> value) {
         // upon reception of ⟨proposal, Set proposed_value, Integer proposal_number⟩ from proposer Pj such that accepted_valuei ⊆ proposed_value:
-        //      accepted_valuei ← proposed_value send ⟨ack, proposal_number⟩ to Pj
+        // accepted_valuei ← proposed_value send ⟨ack, proposal_number⟩ to Pj
         // upon reception of ⟨proposal, Set proposed_value, Integer proposal_number⟩ from proposer Pj such that accepted_valuei ̸⊆ proposed_value:
-        //      accepted_valuei ← accepted_valuei ∪ proposed_value send ⟨nack, proposal_number, accepted_valuei⟩ to Pj
+        // accepted_valuei ← accepted_valuei ∪ proposed_value send ⟨nack, proposal_number, accepted_valuei⟩ to Pj
 
         // Check if the proposed value is included in the accepted value
         boolean included = true;
@@ -174,6 +182,7 @@ public class Latice {
 
     /**
      * Propose a new value
+     * 
      * @param proposal The proposed value
      */
     public void propose(Set<Integer> proposal) {
@@ -197,15 +206,15 @@ public class Latice {
      */
     public void verifyThread1() {
         // upon nack_counti > 0 and ack_counti + nack_counti ≥ f + 1 and activei = true:
-        //      active_proposal_numberi ← active_proposal_numberi + 1
-        //      ack_counti ← 0
-        //      nack_counti ← 0
-        //      trigger beb.broadcast(⟨proposal, proposed_valuei, active_proposal_numberi⟩)
+        // active_proposal_numberi ← active_proposal_numberi + 1
+        // ack_counti ← 0
+        // nack_counti ← 0
+        // trigger beb.broadcast(⟨proposal, proposed_valuei, active_proposal_numberi⟩)
         if (nack_count.get() > 0 && ack_count.get() + nack_count.get() >= F + 1 && active.get()) {
             active_proposal_number.incrementAndGet();
             ack_count.set(0);
             nack_count.set(0);
-            
+
             // Create the message
             LaticeMessageType type = LaticeMessageType.PROPOSE;
             String content = type.toString() + ":" + setToString(proposed_value) + ":" + active_proposal_number.toString();
@@ -221,28 +230,33 @@ public class Latice {
      */
     public void verifyThread2() {
         // upon ack_counti ≥ f + 1 and activei = true:
-        //      trigger decide(proposed_valuei) activei ← false
+        // trigger decide(proposed_valuei) activei ← false
         if (ack_count.get() >= F + 1 && active.get()) {
-            decide(proposed_value);
             active.set(false);
+            try {
+                decide(proposed_value);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
-
     // ----------------------------- UTILS -----------------------------
 
     /**
      * Convert a set of integers to a string
+     * 
      * @param set The set of integers
      * @return The string representation of the set
      */
-    private String setToString(Set<Integer> set){
+    private String setToString(Set<Integer> set) {
         Character delimiter = ',';
         return setToString(set, delimiter);
     }
-    
+
     /**
      * Convert a set of integers to a string
-     * @param set The set of integers
+     * 
+     * @param set       The set of integers
      * @param delimiter The delimiter to use
      * @return The string representation of the set
      */
@@ -256,6 +270,7 @@ public class Latice {
 
     /**
      * Convert a string to a set of integers
+     * 
      * @param string The string to convert
      * @return The set of integers
      */
@@ -270,11 +285,12 @@ public class Latice {
 
     /**
      * Print the decided proposal
+     * 
      * @param proposal The decided proposal
      */
-    private void decide(Set<Integer> proposal) {
+    private void decide(Set<Integer> proposal) throws Exception {
         Character delimiter = ' ';
-        System.out.println("Decided: " + setToString(proposal, delimiter));
+        Files.write(Paths.get(this.outputFilePath), setToString(proposal, delimiter).getBytes(), StandardOpenOption.APPEND);
     }
-        
+
 }

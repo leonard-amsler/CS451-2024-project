@@ -10,9 +10,9 @@ import cs451.Host;
  * PacketString format: <initial sender id>:<content>
  */
 public class MessageParser {
-    
+
     private List<Host> hosts;
-    
+
     public MessageParser(List<Host> hosts) {
         this.hosts = hosts;
     }

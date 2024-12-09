@@ -33,5 +33,5 @@ public class Constants {
     public static final int TIMEOUT_MS = 256;
 
     // Queue size
-    public static final int MAX_QUEUE_SIZE = (int)Math.pow(2, 18); // 256KB
+    public static final int MAX_QUEUE_SIZE = (int) Math.pow(2, 18); // 256KB
 }

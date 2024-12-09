@@ -9,7 +9,7 @@ public class PacketParser {
 
     private List<Host> hosts;
     private MessageParser messageParser;
-    
+
     public PacketParser(List<Host> hosts) {
         this.hosts = hosts;
         this.messageParser = new MessageParser(hosts);
@@ -43,7 +43,6 @@ public class PacketParser {
         Host senderHost = hosts.get(senderId - 1);
         Host receiverHost = hosts.get(receiverId - 1);
         String[] messageSplits = messages.split(";");
-
 
         Message[] sequenceNumbersSet = new Message[messageSplits.length];
         for (int i = 0; i < messageSplits.length; i++) {

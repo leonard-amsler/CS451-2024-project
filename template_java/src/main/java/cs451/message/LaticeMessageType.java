@@ -4,7 +4,7 @@ public enum LaticeMessageType {
     PROPOSE,
     ACK,
     NACK;
-    
+
     @Override
     /**
      * Returns the string representation of the message type
@@ -24,6 +24,7 @@ public enum LaticeMessageType {
 
     /**
      * Returns the message type from the string representation
+     * 
      * @param type The string representation of the message type
      * @return The message type
      */

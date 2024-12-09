@@ -12,6 +12,7 @@ public class ConfigParser {
 
     /**
      * Populate the config file
+     * 
      * @param value path to the config file
      * @return true if the config file was successfully read, false otherwise
      */
@@ -34,6 +35,7 @@ public class ConfigParser {
 
     /**
      * Get the path of the config file
+     * 
      * @return path
      */
     public String getPath() {
@@ -42,6 +44,7 @@ public class ConfigParser {
 
     /**
      * Get the number of messages each sender process should send
+     * 
      * @return m
      */
     public int getM() {
@@ -49,4 +52,3 @@ public class ConfigParser {
     }
 
 }
-

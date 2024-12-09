@@ -29,12 +29,13 @@ public class URB {
 
     // Thread to check for deliveries
     private Thread checkDeliveryThread;
-    
+
     /**
      * Constructor for the URB class
+     * 
      * @param outputFilePath The path to the output file
-     * @param myHost The host that is running the URB
-     * @param hosts The list of all the hosts in the system
+     * @param myHost         The host that is running the URB
+     * @param hosts          The list of all the hosts in the system
      */
     public URB(String outputFilePath, Host myHost, List<Host> hosts) {
         this.outputFilePath = outputFilePath;
@@ -86,9 +87,10 @@ public class URB {
 
     /**
      * Broadcast a message to all the hosts, except the current host
+     * 
      * @param message The message to broadcast
      */
-    public void beb_broadcast(Message message) {    
+    public void beb_broadcast(Message message) {
         for (Host host : hosts) {
             if (host.getId() != myHost.getId()) {
                 perfectLinks.pl_broadcast(message, host);
@@ -98,12 +100,13 @@ public class URB {
 
     /**
      * Deliver a message to the URB, to be called by the perfect links
-     * @param message The message to deliver
+     * 
+     * @param message    The message to deliver
      * @param senderHost The host that sent the message
      */
     public void beb_deliver(Message message, Host senderHost) {
 
-        // Extract message data
+        //  Extract message data
         int initialSenderHostId = message.getInitialSenderHostId();
 
         // Get helper variables
@@ -112,7 +115,7 @@ public class URB {
         boolean alreadyDelivered = lastDelivered.get(initialSenderHostId) >= message.getTimestamp();
 
         // beb broadcast if:
-        // - We are not the original sender of the message
+        //  - We are not the original sender of the message
         // - We have not already received the message from someone else (the only integer in the ack set is the initial sender)
         // - We have not already delivered the message
         if (!isInitialSender && !alreadyReceived && !alreadyDelivered) {
@@ -129,10 +132,11 @@ public class URB {
         }
     }
 
-    //------------------------ Uniform reliable broadcast ------------------------
+    // ------------------------ Uniform reliable broadcast ------------------------
 
     /**
      * Broadcast a message to all the hosts and log it
+     * 
      * @param message The message to broadcast
      */
     public void urb_broadcast(Message message) {
@@ -153,7 +157,7 @@ public class URB {
         // Send the message to all the hosts
         beb_broadcast(message);
 
-        // Log the message
+        //  Log the message
         try {
             log_broadcast(message);
         } catch (Exception e) {
@@ -165,6 +169,7 @@ public class URB {
 
     /**
      * Check if a message can be delivered
+     * 
      * @param message The message to check
      * @return True if the message can be delivered, false otherwise
      */
@@ -192,10 +197,10 @@ public class URB {
         while (true) {
 
             // Make a copy of the ack set
-            List <Message> messagesCopy = new ArrayList<>(ack.keySet());
+            List<Message> messagesCopy = new ArrayList<>(ack.keySet());
 
             // Group the messages by initial sender host id
-            Map <Integer, List<Message>> messagesByHost = new ConcurrentHashMap<>();
+            Map<Integer, List<Message>> messagesByHost = new ConcurrentHashMap<>();
             messagesCopy.forEach(message -> {
                 messagesByHost.putIfAbsent(message.getInitialSenderHostId(), new ArrayList<>());
                 messagesByHost.get(message.getInitialSenderHostId()).add(message);
@@ -223,7 +228,7 @@ public class URB {
                             e.printStackTrace();
                         }
                     } else {
-                        // The messages are sorted, so if we can't deliver the first one, we can't deliver the rest
+                        //  The messages are sorted, so if we can't deliver the first one, we can't deliver the rest
                         break;
                     }
                 }
@@ -242,6 +247,7 @@ public class URB {
 
     /**
      * Log a broadcast message
+     * 
      * @param message The message to log
      * @throws Exception If the file cannot be written to
      */
@@ -254,6 +260,7 @@ public class URB {
 
     /**
      * Log a deliver message
+     * 
      * @param message The message to log
      * @throws Exception If the file cannot be written to
      */

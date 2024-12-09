@@ -12,7 +12,7 @@ import cs451.Host;
  * PacketString format: <type> <sender id> <receiver id> <packet number> <message 1>;<message 2>;...;<message n>
  */
 public class Packet {
-    
+
     private final PacketType PacketType;
     private final Host senderHost;
     private final Host receiverHost;
@@ -21,11 +21,12 @@ public class Packet {
 
     /**
      * Constructor for the Packet class
-     * @param PacketType The type of the packet
-     * @param senderHost The host that sent the packet
+     * 
+     * @param PacketType   The type of the packet
+     * @param senderHost   The host that sent the packet
      * @param receiverHost The host that should receive the packet
      * @param packetNumber The packet number
-     * @param messages The messages contained in the packet
+     * @param messages     The messages contained in the packet
      */
     public Packet(PacketType PacketType, Host senderHost, Host receiverHost, int packetNumber, Message[] messages) {
         this.PacketType = PacketType;
@@ -80,11 +81,10 @@ public class Packet {
         for (Message message : messages) {
             packet.append(message.toPacketString()).append(";");
         }
-        if(messages.length > 0) packet.deleteCharAt(packet.length() - 1); // Remove the last semicolon
+        if (messages.length > 0)
+            packet.deleteCharAt(packet.length() - 1); // Remove the last semicolon
 
         return packet.toString().getBytes();
     }
-
-
 
 }

@@ -25,13 +25,12 @@ import cs451.utils.Pair;
 
 public class PerfectLinks {
 
-    // Queues for messages to be braodcasted
-    private LinkedBlockingQueue<Pair<Message, Host>> broadcastQueue = new LinkedBlockingQueue<>(Constants.MAX_QUEUE_SIZE); // Queue for messages to be broadcasted
-    // Maps for tracking packets   
-    private Map<Integer, Pair<Packet, Long>> packets = new ConcurrentHashMap<>(); // <seqNum, <Packet, timestamp>>
+    //  Queues for messages to be braodcasted
+    private LinkedBlockingQueue<Pair<Message, Host>> broadcastQueue = new LinkedBlockingQueue<>(Constants.MAX_QUEUE_SIZE); //  Queue for messages to be broadcasted
+    //  Maps for tracking packets
+    private Map<Integer, Pair<Packet, Long>> packets = new ConcurrentHashMap<>(); //  <seqNum, <Packet, timestamp>>
     // Map for delivered messages
     private Set<Message> deliveredMessages = ConcurrentHashMap.newKeySet();
-
 
     // Congestion control parameters
     private static final double MAX_WINDOW_SIZE = Math.pow(2, 17); // Maximum window size (131'072)
@@ -70,9 +69,10 @@ public class PerfectLinks {
 
     /**
      * Constructor for the PerfectLinks class.
+     * 
      * @param outputFilePath the path to the output file
-     * @param myHost the host running the process
-     * @param hosts the list of all hosts in the system
+     * @param myHost         the host running the process
+     * @param hosts          the list of all hosts in the system
      */
     public PerfectLinks(String outputFilePath, Host myHost, List<Host> hosts, URB parentURB) {
         this(outputFilePath, myHost, hosts);
@@ -81,9 +81,10 @@ public class PerfectLinks {
 
     /**
      * Constructor for the PerfectLinks class.
+     * 
      * @param outputFilePath the path to the output file
-     * @param myHost the host running the process
-     * @param hosts the list of all hosts in the system
+     * @param myHost         the host running the process
+     * @param hosts          the list of all hosts in the system
      */
     public PerfectLinks(String outputFilePath, Host myHost, List<Host> hosts, Latice parentLatice) {
         this(outputFilePath, myHost, hosts);
@@ -92,9 +93,10 @@ public class PerfectLinks {
 
     /**
      * Constructor for the PerfectLinks class.
+     * 
      * @param outputFilePath the path to the output file
-     * @param myHost the host running the process
-     * @param hosts the list of all hosts in the system
+     * @param myHost         the host running the process
+     * @param hosts          the list of all hosts in the system
      */
     public PerfectLinks(String outputFilePath, Host myHost, List<Host> hosts) {
         this.outputFilePath = outputFilePath;
@@ -171,10 +173,10 @@ public class PerfectLinks {
 
     /**
      * Thread for receiving messages
-    */
+     */
     private void receivePackets() {
 
-        // Create a buffer for receiving packets
+        //  Create a buffer for receiving packets
         byte[] buf = new byte[65535];
         DatagramPacket dgPacket = new DatagramPacket(buf, buf.length);
 
@@ -185,13 +187,13 @@ public class PerfectLinks {
 
                 // Extract the message from the packet
                 String content = new String(dgPacket.getData(), 0, dgPacket.getLength());
-                
-                // Convert to packet
+
+                //  Convert to packet
                 Packet packet = packetParser.parse(content);
 
-                // If the message is an ACK, remove the batch from messageState
-                if(packet.getPacketType() == PacketType.ACK){
-                    // Remove the packet from the packets map
+                //  If the message is an ACK, remove the batch from messageState
+                if (packet.getPacketType() == PacketType.ACK) {
+                    //  Remove the packet from the packets map
                     packets.remove(packet.getPacketNumber());
 
                     // Notify the processQueue thread that a packet has been removed
@@ -205,10 +207,11 @@ public class PerfectLinks {
                 } else if (packet.getPacketType() == PacketType.SEND) {
 
                     // Deliver the message if it hasn't been delivered yet
-                    for (Message message: packet.getMessages()) {
+                    for (Message message : packet.getMessages()) {
                         if (deliveredMessages.add(message)) {
                             // The message was not already delivered
-                            if (parentURB == null) logDeliveredMessage(message, packet.getSenderHost().getId());
+                            if (parentURB == null)
+                                logDeliveredMessage(message, packet.getSenderHost().getId());
                         }
 
                         if (parentURB != null) {
@@ -235,7 +238,7 @@ public class PerfectLinks {
      */
     private void processQueue() {
 
-        while (true){
+        while (true) {
 
             try {
                 // Verify that the packets map is smaller than the window size
@@ -244,7 +247,7 @@ public class PerfectLinks {
                         packets.wait();
                     }
                 }
-                
+
                 // Get the next message from the queue
                 Pair<Message, Host> pair = broadcastQueue.take();
 
@@ -253,11 +256,11 @@ public class PerfectLinks {
                     Message message = pair.getFirst();
                     Host receiverHost = pair.getSecond();
                     Integer receiverId = receiverHost.getId();
-                    
+
                     // Try to get more messages for the same receiver
                     List<Message> messagesList = new ArrayList<>();
                     messagesList.add(message);
-                    for (Pair<Message, Host> new_pair: broadcastQueue) {
+                    for (Pair<Message, Host> new_pair : broadcastQueue) {
                         if (new_pair.getSecond().getId() == receiverId) {
                             messagesList.add(new_pair.getFirst());
                             broadcastQueue.remove(new_pair);
@@ -294,12 +297,13 @@ public class PerfectLinks {
 
     /**
      * Broadcast a message to host
-     * @param message the message to broadcast
+     * 
+     * @param message      the message to broadcast
      * @param receiverHost the host to broadcast the message to
      */
     public void pl_broadcast(Message message, Host receiverHost) {
         // Add to the broadcast queue
-        while(broadcastQueue.size() + 1000 > Constants.MAX_QUEUE_SIZE) {
+        while (broadcastQueue.size() + 1000 > Constants.MAX_QUEUE_SIZE) {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -311,6 +315,7 @@ public class PerfectLinks {
 
     /**
      * Send an acknowledgment message to the sender.
+     * 
      * @param sent the message that was initially sent
      * @throws Exception
      */
@@ -323,6 +328,7 @@ public class PerfectLinks {
 
     /**
      * Send an packet to the receiver.
+     * 
      * @param packet the packet to send
      * @throws Exception
      */
@@ -355,12 +361,13 @@ public class PerfectLinks {
 
     /**
      * Log the broadcast message.
+     * 
      * @param packet
      * @throws Exception
      */
     private synchronized void logBroadcastPacket(Packet packet) throws Exception {
         StringBuilder log = new StringBuilder();
-        for (Message message: packet.getMessages()) {
+        for (Message message : packet.getMessages()) {
             log.append("b").append(" ");
             log.append(message.getContent()).append("\n");
         }
@@ -369,7 +376,8 @@ public class PerfectLinks {
 
     /**
      * Log the delivered message.
-     * @param message the message to log
+     * 
+     * @param message  the message to log
      * @param senderId the id of the sender
      * @throws Exception
      */
