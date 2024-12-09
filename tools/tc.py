@@ -46,8 +46,8 @@ class TC:
 if __name__ == "__main__":
     # Network configuration using the tc command
     config = {
-        'delay': ('100ms', '25ms'),
-        'loss': ('5%', '10%'),
+        'delay': ('200ms', '50ms'),
+        'loss': ('10%', '25%'),
         'reordering': ('25%', '50%')
     }
 
