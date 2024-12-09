@@ -9,10 +9,20 @@ readonly HOSTS_PATH="../example/hosts"
 readonly BASE_CONFIG_PATH="../example/configs/"
 readonly PREFIX_CONFIG_PATH="lattice-agreement-"
 readonly SUFFIX_CONFIG_PATH=".config"
+readonly CONFIG_GENERATOR="../example/configs/latice-config-generator.py"
 readonly CORRECTNESS_PASS="src/main/java/cs451/tests/verify_correctness.py"
 readonly THROUGHPUT_PATH="src/main/java/cs451/tests/compute_throughput.py"
 
 readonly EXEC_TIME=60
+
+# Number of processes
+readonly NB_PROCESSES=6
+
+# Config gererator parameters
+readonly N=$NB_PROCESSES
+readonly P=100 # Nb of rounds
+readonly VS=15 # Max nb of values per process
+readonly DS=30 # Max nb of distinct values for all processes
 
 # Build the application
 echo ""
@@ -28,10 +38,19 @@ sleep 5
 # echo "Network setup script finished!"
 # sleep 5
 
+# Generate the configuration files
+echo ""
+echo "Generating files..."
+python3 $CONFIG_GENERATOR $N $P $VS $DS $BASE_PATH$BASE_CONFIG_PATH $BASE_PATH$HOSTS_PATH $BASE_PATH$OUTPUT_PATH
+echo "files generated!"
+sleep 5
+
+
+
 # Start all processes (Correctness/Performance Test)
 echo ""
 echo "Starting all processes..."
-for i in {1..10}
+for i in $(seq 1 $NB_PROCESSES);
 do
     gnome-terminal -- bash -c "cd $BASE_PATH; ./$RUN_PATH --id $i --hosts $HOSTS_PATH --output $OUTPUT_PATH/$i.output $BASE_CONFIG_PATH$PREFIX_CONFIG_PATH$i$SUFFIX_CONFIG_PATH; exec bash";
 done

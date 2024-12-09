@@ -25,9 +25,9 @@ public class Latice {
 
     // Timestamp
     private AtomicInteger current_timestamp;
-
-    private AtomicInteger current_round;
     private Integer nb_rounds;
+
+    private int MAX_NB_ACTIVE_ROUNDS = 1;
 
     // Algorithm variables
     private Map<Integer, AtomicBoolean> active = new ConcurrentHashMap<>(); // <round, active>
@@ -45,7 +45,7 @@ public class Latice {
         // Init the variables from the template
         this.myHost = myHost;
         this.hosts = hosts;
-        this.F = (int) Math.floor((double) hosts.size() / 2);
+        this.F = (hosts.size() - 1) / 2;
         this.nb_rounds = nb_rounds;
 
         // PerfectLinks object
@@ -53,7 +53,6 @@ public class Latice {
         this.perfectLinks = new PerfectLinks(outputFilePath, myHost, hosts, this);
 
         // Init the variables for the algorithm for the proposer
-        this.current_round = new AtomicInteger(0);
         this.active = new ConcurrentHashMap<>();
         this.ack_count = new ConcurrentHashMap<>();
         this.nack_count = new ConcurrentHashMap<>();
@@ -135,6 +134,7 @@ public class Latice {
         int round = Integer.parseInt(parts[1]);
         int proposal_nb;
         Set<Integer> value;
+
         switch (messageType) {
             case PROPOSE:
                 // <proposal, Set proposed_value, Integer proposal_number>
@@ -237,16 +237,15 @@ public class Latice {
      */
     public void propose(Set<Integer> proposal, int round) {
         //  Verify that there is no active rounds
-        boolean active_round = true;
-        while (active_round) {
-            active_round = false;
+        int active_nb = MAX_NB_ACTIVE_ROUNDS + 1;
+        while (active_nb >= MAX_NB_ACTIVE_ROUNDS) {
+            active_nb = 0;
             for (int r = 0; r < nb_rounds; r++) {
                 if (active.get(r).get()) {
-                    active_round = true;
-                    break;
+                    active_nb += 1;
                 }
             }
-            if (active_round) {
+            if (active_nb >= MAX_NB_ACTIVE_ROUNDS) {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {

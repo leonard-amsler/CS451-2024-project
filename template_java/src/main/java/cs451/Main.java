@@ -66,10 +66,6 @@ public class Main {
         Latice latice = new Latice(myHost, parser.hosts(), parser.output(), parser.config_p());
         latice.start();
 
-        // for (Set<Integer> proposal : proposals) {
-        // latice.propose(proposal);
-        // }
-
         for (int i = 0; i < p; i++) {
             latice.propose(proposals.get(i), i);
         }

@@ -314,7 +314,7 @@ def check_la2(decided):
     violations = []
     for process_id, values in decided.items():
             for other_process_id, other_decided_values in decided.items():
-                for i in range(len(values)):
+                for i in range(min(len(values), len(other_decided_values))):
                     if process_id == other_process_id:
                         continue
                     if not issubset(values[i], other_decided_values[i]) and not issubset(other_decided_values[i], values[i]):
@@ -340,13 +340,13 @@ def verify_correctness_lattice(output_dir, config_dir):
     configs = parseLaticeConfig(config_dir)
     decided = parseLaticeLogs(output_dir)
 
-    print("\nChecking Lattice Agreement properties...")
-    print("   Configurations:")
-    for process_id, config in configs.items():
-        print(f"      Process {process_id}: {config}")
-    print("   Decided values:")
-    for process_id, values in decided.items():
-        print(f"      Process {process_id}: {values}")
+    # print("\nChecking Lattice Agreement properties...")
+    # print("   Configurations:")
+    # for process_id, config in configs.items():
+    #     print(f"      Process {process_id}: {config}")
+    # print("   Decided values:")
+    # for process_id, values in decided.items():
+    #     print(f"      Process {process_id}: {values}")
 
     # Pi: Process i
     # Ii: Set of values proposed by Pi
