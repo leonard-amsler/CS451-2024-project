@@ -1,6 +1,6 @@
 #!/bin/bash
 
-readonly BASE_PATH="/home/dcl/Desktop/CS451-2024-project/template_java/"
+readonly BASE_PATH="/Users/leonardamsler/Desktop/EPFL/Master/MA1/Distributed_algorithms/Project/CS451-2024-project/template_java"
 readonly RUN_PATH="run.sh"
 readonly BUILD_PATH="build.sh"
 readonly TC_PATH="../tools/tc.py"
