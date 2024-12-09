@@ -2,8 +2,6 @@ package cs451;
 
 import java.util.List;
 import java.util.Set;
-
-import cs451.message.Message;
 import cs451.parsers.Parser;
 
 public class Main {

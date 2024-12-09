@@ -27,7 +27,7 @@ public class Latice {
     private AtomicInteger current_timestamp;
     private Integer nb_rounds;
 
-    private int MAX_NB_ACTIVE_ROUNDS = 1;
+    private int MAX_NB_ACTIVE_ROUNDS = 10;
 
     // Algorithm variables
     private Map<Integer, AtomicBoolean> active = new ConcurrentHashMap<>(); // <round, active>
@@ -320,7 +320,7 @@ public class Latice {
             }
 
             for (int r = 0; r < nb_rounds; r++) {
-                if (ack_count.get(r).get() >= F + 1 && active.get(r).get()) {
+                if (ack_count.get(r).get() >= F + 1 && active.get(r).get() && r == getLowestActiveRound()) {
                     active.get(r).set(false);
                     try {
                         decide(proposed_value.get(r));
@@ -332,6 +332,19 @@ public class Latice {
         }
     }
     // ----------------------------- UTILS -----------------------------
+
+    /**
+     * Get the lowest active round
+     * 
+     * @return The lowest active round
+     */
+    public Integer getLowestActiveRound() {
+        return active.entrySet().stream()
+                .filter(entry -> entry.getValue().get()) // Only consider active rounds
+                .map(Map.Entry::getKey) // Extract the round IDs (keys)
+                .min(Integer::compare) // Find the smallest round
+                .orElse(null); // Return null if no active rounds exist
+    }
 
     /**
      * Convert a set of integers to a string

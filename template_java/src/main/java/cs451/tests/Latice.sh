@@ -15,11 +15,8 @@ readonly THROUGHPUT_PATH="src/main/java/cs451/tests/compute_throughput.py"
 
 readonly EXEC_TIME=60
 
-# Number of processes
-readonly NB_PROCESSES=6
-
 # Config gererator parameters
-readonly N=$NB_PROCESSES
+readonly NB_PROCESSES=6 # Nb of processes
 readonly P=100 # Nb of rounds
 readonly VS=15 # Max nb of values per process
 readonly DS=30 # Max nb of distinct values for all processes
@@ -32,16 +29,16 @@ echo "Build finished!"
 sleep 5
 
 # Run the network setup script
-# echo ""
-# echo "Running network setup script..."
-# gnome-terminal -- bash -c "cd $BASE_PATH; python $TC_PATH; exec bash"
-# echo "Network setup script finished!"
-# sleep 5
+echo ""
+echo "Running network setup script..."
+gnome-terminal -- bash -c "cd $BASE_PATH; python $TC_PATH; exec bash"
+echo "Network setup script finished!"
+sleep 5
 
 # Generate the configuration files
 echo ""
 echo "Generating files..."
-python3 $CONFIG_GENERATOR $N $P $VS $DS $BASE_PATH$BASE_CONFIG_PATH $BASE_PATH$HOSTS_PATH $BASE_PATH$OUTPUT_PATH
+python3 $CONFIG_GENERATOR $NB_PROCESSES $P $VS $DS $BASE_PATH$BASE_CONFIG_PATH $BASE_PATH$HOSTS_PATH $BASE_PATH$OUTPUT_PATH
 echo "files generated!"
 sleep 5
 
