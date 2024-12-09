@@ -82,15 +82,18 @@ public class Latice {
         Set<Integer> value;
         switch (messageType) {
             case PROPOSE:
+                //<proposal, Set proposed_value, Integer proposal_number>
                 proposal_nb = Integer.parseInt(parts[2]);
                 value = stringToSet(parts[1]);
                 handle_proposal(senderHost, proposal_nb, value);
                 break;
             case ACK:
+                //<ack, Integer proposal_number>
                 proposal_nb = Integer.parseInt(parts[1]);
                 handle_ack(senderHost, proposal_nb);
                 break;
             case NACK:
+                //<nack, Integer proposal_number, Set value>
                 proposal_nb = Integer.parseInt(parts[1]);
                 value = stringToSet(parts[2]);
                 handle_nack(senderHost, proposal_nb, value);
@@ -232,12 +235,23 @@ public class Latice {
      * @param set The set of integers
      * @return The string representation of the set
      */
-    private String setToString(Set<Integer> set) {
+    private String setToString(Set<Integer> set){
+        Character delimiter = ',';
+        return setToString(set, delimiter);
+    }
+    
+    /**
+     * Convert a set of integers to a string
+     * @param set The set of integers
+     * @param delimiter The delimiter to use
+     * @return The string representation of the set
+     */
+    private String setToString(Set<Integer> set, Character delimiter) {
         Set<String> stringSet = new HashSet<>();
         for (Integer value : set) {
             stringSet.add(value.toString());
         }
-        return String.join(",", stringSet);
+        return String.join(delimiter.toString(), stringSet);
     }
 
     /**
@@ -259,7 +273,8 @@ public class Latice {
      * @param proposal The decided proposal
      */
     private void decide(Set<Integer> proposal) {
-        System.out.println("Decided: " + setToString(proposal));
+        Character delimiter = ' ';
+        System.out.println("Decided: " + setToString(proposal, delimiter));
     }
         
 }
